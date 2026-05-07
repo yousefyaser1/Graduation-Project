@@ -1,0 +1,67 @@
+name: dermatology_ai_app
+description: An offline-capable, cross-platform mobile application for dermatological screening using Explainable AI (XAI).
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # UI & Design
+  cupertino_icons: ^1.0.6
+  google_fonts: ^6.1.0
+  flutter_svg: ^2.0.9
+  cached_network_image: ^3.3.0
+
+  # Camera & Image Handling
+  camera: ^0.10.5+5
+  image_picker: ^1.0.5
+
+  # State Management
+  flutter_riverpod: ^2.4.9
+
+  # Routing
+  go_router: ^13.0.0
+
+  # Local Database
+  sqflite: ^2.3.0
+  path_provider: ^2.1.1
+  path: ^1.8.3
+
+  # Permissions
+  permission_handler: ^11.1.0
+
+  # Utilities
+  intl: ^0.18.1
+  uuid: ^4.2.1
+  equatable: ^2.0.5
+  shared_preferences: ^2.2.2
+  share_plus: ^7.2.2
+
+  # PDF report generation
+  pdf: ^3.10.7
+  printing: ^5.12.0
+
+  # Logging
+  logger: ^2.0.2+1
+
+  # TensorFlow Lite
+  tflite_flutter: ^0.12.0
+
+  # Image processing (Score-CAM heatmap generation)
+  image: ^4.1.7
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/models/  # For future TFLite models

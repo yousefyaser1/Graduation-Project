@@ -1,0 +1,52 @@
+# Datasets
+Augmented_Dataset/
+New_Augmented_Dataset/
+datasets/
+data/
+
+# Trained model files
+*.keras
+*.h5
+*.tflite
+*.pt
+*.pth
+*.pkl
+*.ckpt
+*.pb
+
+# Python
+__pycache__/
+*.py[cod]
+.env
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Flutter / Dart
+Flutter/build/
+Flutter/.dart_tool/
+Flutter/.flutter-plugins
+Flutter/.flutter-plugins-dependencies
+Flutter/.pub-cache/
+Flutter/.pub/
+Flutter/android/.gradle/
+Flutter/android/local.properties
+Flutter/android/key.properties
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude / Kilo
+.claude/scheduled_tasks.lock
+.kilo/

@@ -1,0 +1,16 @@
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    - prefer_const_constructors
+    - prefer_const_literals_to_create_immutables
+    - avoid_print
+    - prefer_single_quotes
+    - sort_child_properties_last
+    - use_key_in_widget_constructors
+    - prefer_final_fields
+    - unnecessary_const
+    - unnecessary_new
+    - sized_box_for_whitespace
+    - prefer_is_empty
+    - prefer_is_not_empty
