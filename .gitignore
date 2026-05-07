@@ -4,10 +4,9 @@ New_Augmented_Dataset/
 datasets/
 data/
 
-# Trained model files
+# Trained model files (large training artifacts - not for app)
 *.keras
 *.h5
-*.tflite
 *.pt
 *.pth
 *.pkl
