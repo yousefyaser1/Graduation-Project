@@ -2,9 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../core/theme/app_theme.dart';
 import '../../core/routing/app_router.dart';
 import '../../providers/user_provider.dart';
+import '../../providers/scan_provider.dart';
 import '../../services/session_service.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
@@ -37,6 +37,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   }
 
   Future<void> _initSession() async {
+    // Reclaim heatmap/image files left over from previously-deleted scans.
+    // Fire-and-forget so it never delays navigation.
+    unawaited(cleanOrphanScanFiles());
+
     // Wait for the minimum splash duration
     await Future.delayed(const Duration(milliseconds: 2400));
     if (!mounted) return;

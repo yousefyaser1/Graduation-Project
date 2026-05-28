@@ -25,49 +25,71 @@ class AppBottomNav extends StatelessWidget {
       child: SafeArea(
         child: SizedBox(
           height: 64,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+          // Allow the elevated scan button to overflow above the bar.
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
             children: [
-              _NavItem(
-                icon: Icons.home_outlined,
-                activeIcon: Icons.home_rounded,
-                label: 'Home',
-                isActive: currentIndex == 0,
-                onTap: () => context.go(AppRoutes.home),
-              ),
-              // Center scan button
-              GestureDetector(
-                onTap: () => context.push(AppRoutes.bodyPartSelection),
-                child: Container(
-                  width: 52,
-                  height: 52,
-                  decoration: const BoxDecoration(
-                    color: AppColors.primary,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Color(0x443B82F6),
-                        blurRadius: 12,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
+              Row(
+                children: [
+                  Expanded(
+                    child: _NavItem(
+                      icon: Icons.home_outlined,
+                      activeIcon: Icons.home_rounded,
+                      label: 'Home',
+                      isActive: currentIndex == 0,
+                      onTap: () => context.go(AppRoutes.home),
+                    ),
                   ),
-                  child: const Icon(Icons.crop_free, color: Colors.white, size: 24),
+                  Expanded(
+                    child: _NavItem(
+                      icon: Icons.history_outlined,
+                      activeIcon: Icons.history_rounded,
+                      label: 'History',
+                      isActive: currentIndex == 2,
+                      onTap: () => context.go(AppRoutes.history),
+                    ),
+                  ),
+                  // Spacer reserving room for the centered scan button.
+                  const SizedBox(width: 72),
+                  Expanded(
+                    child: _NavItem(
+                      icon: Icons.person_outline,
+                      activeIcon: Icons.person_rounded,
+                      label: 'Profile',
+                      isActive: currentIndex == 3,
+                      onTap: () => context.go(AppRoutes.profile),
+                    ),
+                  ),
+                ],
+              ),
+              // Center scan button, elevated above the bar.
+              Positioned(
+                top: -28,
+                child: GestureDetector(
+                  onTap: () => context.push(AppRoutes.bodyPartSelection),
+                  child: Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 4),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x553B82F6),
+                          blurRadius: 16,
+                          offset: Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.photo_camera_rounded,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
                 ),
-              ),
-              _NavItem(
-                icon: Icons.history_outlined,
-                activeIcon: Icons.history_rounded,
-                label: 'History',
-                isActive: currentIndex == 2,
-                onTap: () => context.go(AppRoutes.history),
-              ),
-              _NavItem(
-                icon: Icons.person_outline,
-                activeIcon: Icons.person_rounded,
-                label: 'Profile',
-                isActive: currentIndex == 3,
-                onTap: () => context.go(AppRoutes.profile),
               ),
             ],
           ),

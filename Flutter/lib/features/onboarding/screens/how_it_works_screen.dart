@@ -29,40 +29,59 @@ class HowItWorksScreen extends StatelessWidget {
               ),
               const SizedBox(height: 40),
 
-              _StepCard(
-                stepNumber: 1,
-                iconData: Icons.camera_alt_outlined,
-                iconColor: const Color(0xFF60A5FA),
-                iconBg: const Color(0xFFDBEAFE),
-                title: 'Capture a photo',
-                description:
-                    'Take a clear, close-up photo of your skin area in natural light.',
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _StepCard(
+                        stepNumber: 1,
+                        iconData: Icons.camera_alt_outlined,
+                        iconColor: const Color(0xFF60A5FA),
+                        iconBg: const Color(0xFFDBEAFE),
+                        title: 'Capture a photo',
+                        description:
+                            'Take a clear, close-up photo of your skin area in natural light.',
+                      ),
+                      const SizedBox(height: 16),
+
+                      _StepCard(
+                        stepNumber: 2,
+                        iconData: Icons.search_rounded,
+                        iconColor: const Color(0xFF34D399),
+                        iconBg: const Color(0xFFD1FAE5),
+                        title: 'Instant Analysis',
+                        description:
+                            'Our AI technology scans and analyzes your skin condition in seconds.',
+                      ),
+                      const SizedBox(height: 16),
+
+                      _StepCard(
+                        stepNumber: 3,
+                        iconData: Icons.description_outlined,
+                        iconColor: const Color(0xFFA78BFA),
+                        iconBg: const Color(0xFFEDE9FE),
+                        title: 'Get your results',
+                        description:
+                            'Receive a personalized report with insights and recommendations.',
+                      ),
+                      const SizedBox(height: 16),
+
+                      _StepCard(
+                        stepNumber: 4,
+                        iconData: Icons.lightbulb_outline,
+                        iconColor: const Color(0xFFF59E0B),
+                        iconBg: const Color(0xFFFEF3C7),
+                        title: 'See why (Explainable AI)',
+                        description:
+                            'Every result comes with a Score-CAM heatmap showing exactly which areas the AI focused on — no black box.',
+                      ),
+                    ],
+                  ),
+                ),
               ),
+
               const SizedBox(height: 16),
-
-              _StepCard(
-                stepNumber: 2,
-                iconData: Icons.search_rounded,
-                iconColor: const Color(0xFF34D399),
-                iconBg: const Color(0xFFD1FAE5),
-                title: 'Instant Analysis',
-                description:
-                    'Our AI technology scans and analyzes your skin condition in seconds.',
-              ),
-              const SizedBox(height: 16),
-
-              _StepCard(
-                stepNumber: 3,
-                iconData: Icons.description_outlined,
-                iconColor: const Color(0xFFA78BFA),
-                iconBg: const Color(0xFFEDE9FE),
-                title: 'Get your results',
-                description:
-                    'Receive a personalized report with insights and recommendations.',
-              ),
-
-              const Spacer(),
-
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:equatable/equatable.dart';
 
 /// Model representing a scan result
@@ -10,10 +11,13 @@ class ScanResult extends Equatable {
   final Map<String, double> classProbabilities;
   final DateTime timestamp;
   final String? notes;
-  final String? heatmapPath;       // Score-CAM overlay image saved to device
-  final double? anomalyRatio;      // VAE anomaly ratio — not persisted to DB
-  final String? vaeHeatmapPath;    // VAE anomaly heatmap image — not persisted to DB
-  final int? vaeMs;                // Per-stage inference timing (ms) — not persisted
+  final String? heatmapPath;       // Score-CAM overlay image (predicted class)
+  final Map<String, String> classHeatmapPaths; // per-class Score-CAM overlays
+  final String? xaiRationale;      // region-aware text describing where the model looked
+  final double? anomalyRatio;      // VAE anomaly ratio
+  final String? vaeHeatmapPath;    // VAE anomaly heatmap image
+  final int? preprocessMs;         // Per-stage inference timing (ms)
+  final int? vaeMs;
   final int? cnnMs;
   final int? scoreCamMs;
 
@@ -27,8 +31,11 @@ class ScanResult extends Equatable {
     required this.timestamp,
     this.notes,
     this.heatmapPath,
+    this.classHeatmapPaths = const {},
+    this.xaiRationale,
     this.anomalyRatio,
     this.vaeHeatmapPath,
+    this.preprocessMs,
     this.vaeMs,
     this.cnnMs,
     this.scoreCamMs,
@@ -44,8 +51,11 @@ class ScanResult extends Equatable {
     DateTime? timestamp,
     String? notes,
     String? heatmapPath,
+    Map<String, String>? classHeatmapPaths,
+    String? xaiRationale,
     double? anomalyRatio,
     String? vaeHeatmapPath,
+    int? preprocessMs,
     int? vaeMs,
     int? cnnMs,
     int? scoreCamMs,
@@ -60,8 +70,11 @@ class ScanResult extends Equatable {
       timestamp: timestamp ?? this.timestamp,
       notes: notes ?? this.notes,
       heatmapPath: heatmapPath ?? this.heatmapPath,
+      classHeatmapPaths: classHeatmapPaths ?? this.classHeatmapPaths,
+      xaiRationale: xaiRationale ?? this.xaiRationale,
       anomalyRatio: anomalyRatio ?? this.anomalyRatio,
       vaeHeatmapPath: vaeHeatmapPath ?? this.vaeHeatmapPath,
+      preprocessMs: preprocessMs ?? this.preprocessMs,
       vaeMs: vaeMs ?? this.vaeMs,
       cnnMs: cnnMs ?? this.cnnMs,
       scoreCamMs: scoreCamMs ?? this.scoreCamMs,
@@ -79,6 +92,15 @@ class ScanResult extends Equatable {
       'timestamp': timestamp.millisecondsSinceEpoch,
       'notes': notes,
       'heatmap_path': heatmapPath,
+      'class_heatmap_paths':
+          classHeatmapPaths.isEmpty ? null : jsonEncode(classHeatmapPaths),
+      'xai_rationale': xaiRationale,
+      'vae_heatmap_path': vaeHeatmapPath,
+      'anomaly_ratio': anomalyRatio,
+      'preprocess_ms': preprocessMs,
+      'vae_ms': vaeMs,
+      'cnn_ms': cnnMs,
+      'score_cam_ms': scoreCamMs,
     };
   }
 
@@ -95,6 +117,19 @@ class ScanResult extends Equatable {
       timestamp: DateTime.fromMillisecondsSinceEpoch(map['timestamp'] as int),
       notes: map['notes'] as String?,
       heatmapPath: map['heatmap_path'] as String?,
+      classHeatmapPaths: map['class_heatmap_paths'] == null
+          ? const {}
+          : Map<String, String>.from(
+              (jsonDecode(map['class_heatmap_paths'] as String) as Map)
+                  .map((k, v) => MapEntry(k as String, v as String)),
+            ),
+      xaiRationale: map['xai_rationale'] as String?,
+      vaeHeatmapPath: map['vae_heatmap_path'] as String?,
+      anomalyRatio: (map['anomaly_ratio'] as num?)?.toDouble(),
+      preprocessMs: (map['preprocess_ms'] as num?)?.toInt(),
+      vaeMs: (map['vae_ms'] as num?)?.toInt(),
+      cnnMs: (map['cnn_ms'] as num?)?.toInt(),
+      scoreCamMs: (map['score_cam_ms'] as num?)?.toInt(),
     );
   }
 
@@ -109,8 +144,11 @@ class ScanResult extends Equatable {
         timestamp,
         notes,
         heatmapPath,
+        classHeatmapPaths,
+        xaiRationale,
         anomalyRatio,
         vaeHeatmapPath,
+        preprocessMs,
         vaeMs,
         cnnMs,
         scoreCamMs,

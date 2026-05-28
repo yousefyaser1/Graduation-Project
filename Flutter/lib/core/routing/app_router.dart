@@ -25,6 +25,7 @@ import '../../features/core_workflow/screens/help_support_screen.dart';
 import '../../features/core_workflow/screens/specialist_dashboard_screen.dart';
 import '../../features/results/screens/analysis_results_screen.dart';
 import '../../features/results/screens/book_appointment_screen.dart';
+import '../../features/results/screens/xai_heatmap_screen.dart';
 import '../../models/scan_result.dart';
 
 class AppRoutes {
@@ -47,6 +48,7 @@ class AppRoutes {
   static const String capture             = '/capture';
   static const String analyzing           = '/analyzing';
   static const String analysisResults     = '/analysis-results';
+  static const String xaiHeatmap          = '/xai-heatmap';
   static const String bookAppointment     = '/book-appointment';
   static const String history             = '/history';
   static const String profile             = '/profile';
@@ -118,6 +120,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
 
+      GoRoute(
+        path: AppRoutes.xaiHeatmap,
+        builder: (c, s) {
+          final scan = s.extra as ScanResult?;
+          return XAIHeatmapScreen(scan: scan);
+        },
+      ),
       GoRoute(
         path: AppRoutes.bookAppointment,
         builder: (c, s) {

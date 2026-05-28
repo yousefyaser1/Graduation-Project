@@ -1,0 +1,1079 @@
+\chapter{Implementation}
+
+This chapter presents the complete technical implementation of the proposed skin disease classification system. The development followed an iterative methodology, beginning with dataset curation and model training, progressing through architecture selection and optimisation, and culminating in the deployment of a fully offline mobile application. Each subsection documents the engineering decisions, configurations, and results that shaped the final delivered system.
+
+Figure~\ref{fig:system_flow} illustrates the end-to-end system pipeline, from image acquisition through diagnosis output.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{Figures/system_flow_diagram.png}
+    \caption{End-to-end system flow of the proposed skin disease classification application. The pipeline proceeds from image capture through three sequential inference stages, terminating in an on-screen diagnosis with visual explanation.}
+    \label{fig:system_flow}
+\end{figure}
+
+%% ─────────────────────────────────────────────
+%% SCREENSHOT INSTRUCTION — system_flow_diagram.png
+%% Create this diagram in draw.io (diagrams.net) using the following structure:
+%%
+%%   [User captures/uploads image]
+%%        │
+%%        ▼
+%%   [Image Preprocessing] ── resize, normalize
+%%        │
+%%        ▼
+%%   [Stage 1: VAE Anomaly Detection]
+%%        │
+%%        ├── Normal → [Display: "No Disease Detected"]
+%%        │
+%%        ▼ (Anomalous)
+%%   [Stage 2: EfficientNetB2 Classification]
+%%        │
+%%        ▼
+%%   [Stage 3: Score-CAM Heatmap Generation]
+%%        │
+%%        ▼
+%%   [Results Screen: Diagnosis + Confidence + Heatmap]
+%%        │
+%%        ▼
+%%   [Save to Local SQLite Database]
+%%
+%% Use rounded rectangles for processing steps, diamonds for decisions,
+%% and a consistent colour scheme (e.g., blue for AI stages, green for UI).
+%% Export as PNG at 300 DPI, save as Figures/system_flow_diagram.png
+%% ─────────────────────────────────────────────
+
+
+% ============================================================
+\section{Development Environment}
+% ============================================================
+
+Training deep convolutional neural networks---particularly during fine-tuning, where millions of parameters are updated simultaneously---demands significant computational resources. Two complementary environments were used throughout this project: a local development workstation for application coding and initial prototyping, and cloud-based GPU notebooks for the computationally intensive model training phases.
+
+\subsection{Hardware Specifications}
+
+\begin{table}[H]
+\centering
+\caption{Hardware specifications of the development and deployment environments.}
+\label{tab:hardware_specs}
+\begin{tabular}{|p{3.8cm}|p{5.8cm}|p{5cm}|}
+\hline
+\textbf{Component} & \textbf{Specification} & \textbf{Purpose} \\ \hline
+Development Machine & Intel Core i5-12450H, 8\,GB RAM, GTX\,1650 GPU, 250\,GB SSD & Application development, local testing, and initial prototyping \\ \hline
+GPU Training Platform & Kaggle Notebooks (NVIDIA P100 / T4, 16\,GB VRAM) & All CNN and VAE model training and evaluation \\ \hline
+Target Mobile Device & Android 10+ or iOS 14+, $\geq$\,4\,GB RAM, ARM64 & On-device TFLite inference at runtime \\ \hline
+Camera & Minimum 8\,MP with autofocus & Skin image capture for diagnosis \\ \hline
+Internet Connectivity & Wi-Fi / 4G & Required only during initial app installation; all inference runs offline \\ \hline
+\end{tabular}
+\end{table}
+
+The dedicated GPU on the Kaggle platform was essential for executing the \texttt{AUTOTUNE} data-pipeline optimisations and accelerating the tensor operations required by the Adam optimiser during backpropagation.
+
+\subsection{Software Stack}
+
+\begin{table}[H]
+\centering
+\caption{Machine learning tools and frameworks.}
+\label{tab:ml_stack}
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Component} & \textbf{Tool / Version} \\ \hline
+Deep learning framework & TensorFlow / Keras (Python) \\ \hline
+GPU training platform & Kaggle (NVIDIA P100 / T4) \\ \hline
+Model architectures evaluated & MobileNetV2, EfficientNetB0--B2 \\ \hline
+Image processing (Python) & OpenCV, NumPy \\ \hline
+Class balancing & scikit-learn (\texttt{compute\_class\_weight}) \\ \hline
+TFLite conversion & \texttt{tf.lite.TFLiteConverter} \\ \hline
+Random seed & 42 (all experiments) \\ \hline
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Flutter mobile application dependencies.}
+\label{tab:flutter_stack}
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Component} & \textbf{Tool / Version} \\ \hline
+Framework / Language & Flutter 3.x / Dart 3.x \\ \hline
+State management & Riverpod (\texttt{flutter\_riverpod} \^{}2.4.9) \\ \hline
+Navigation & GoRouter (\texttt{go\_router} \^{}13.0.0) \\ \hline
+On-device AI inference & TFLite Flutter (\texttt{tflite\_flutter}) \\ \hline
+Image processing (Dart) & \texttt{image} package \\ \hline
+Local persistence & SQLite (\texttt{sqflite} \^{}2.3.0) \\ \hline
+Camera integration & \texttt{camera} \^{}0.10.5+5 \\ \hline
+Image picker & \texttt{image\_picker} \^{}1.0.5 \\ \hline
+File paths & \texttt{path\_provider} \^{}2.1.1 \\ \hline
+Runtime permissions & \texttt{permission\_handler} \^{}11.1.0 \\ \hline
+\end{tabular}
+\end{table}
+
+
+% ============================================================
+\section{Dataset Preparation}
+\label{sec:dataset}
+% ============================================================
+
+The quality of any supervised learning system is fundamentally bound by the quality of its training data. This section details the multi-stage pipeline that transformed raw clinical photographs into a clean, balanced, and reproducible dataset.
+
+\subsection{Data Acquisition}
+
+Training images were sourced from two complementary repositories:
+
+\begin{itemize}
+    \item \textbf{DermNet (via Kaggle):} A structured, pre-labelled collection of clinical dermatological images covering the three target classes---Acne, Eczema, and Tinea---that provided the foundational volume of the dataset.
+    \item \textbf{Dermatology Atlas:} To improve real-world robustness and increase sample diversity, additional images were programmatically scraped from the Dermatology Atlas using automated extraction scripts. This supplementary data introduced a wider range of skin tones, lighting conditions, and lesion presentations.
+\end{itemize}
+
+Representative samples from both sources are shown in Figure~\ref{fig:dataset_samples}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{Figures/skin_disease_samples_horizontal.jpg}
+\caption{Sample images representing Acne, Eczema, and Tinea from the combined dataset. Note the intra-class variability in colour, texture, and presentation.}
+\label{fig:dataset_samples}
+\end{figure}
+
+\subsection{Data Cleaning and Quality Control}
+
+The merged dataset underwent rigorous manual review. Images were discarded if they were:
+
+\begin{itemize}
+    \item Non-dermatological (histology slides, diagrams, or unrelated photographs),
+    \item Severely low-resolution, blurred, or heavily watermarked,
+    \item Visibly mislabelled (verified through cross-referencing with clinical literature).
+\end{itemize}
+
+Duplicate images were identified and removed to prevent data leakage. The cleaned output was stored in a dedicated directory, \texttt{Finalized\_Clean\_Data/}.
+
+\subsection{Stratified Dataset Splitting}
+
+The cleaned dataset was restructured from a two-way (train/test) split into a three-way split with stratified sampling to preserve class proportions. Approximately 90\% of images were allocated to training, with 5\% each for validation and test. Critically, \textit{this split was performed before any augmentation}, ensuring that the validation and test sets remained completely pure and unseen during training.
+
+\subsection{Offline Data Augmentation}
+
+Augmentation was applied \textit{exclusively} to the training split using a deterministic Keras pipeline. Each original training image was transformed three times, producing three augmented copies. A fixed random seed of 42 ensured full reproducibility.
+
+\begin{table}[H]
+\centering
+\caption{Data augmentation techniques applied to the training set.}
+\label{tab:augmentation}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Technique} & \textbf{Parameters} & \textbf{Rationale} \\ \hline
+Horizontal Flip & 50\% probability & Lesions have no left-right orientation \\ \hline
+Vertical Flip & 50\% probability & Augments viewpoint diversity \\ \hline
+Random Rotation & $\pm 15^{\circ}$, reflect fill & Simulates camera angle variation \\ \hline
+Random Zoom & $\pm 10\%$, reflect fill & Mimics varying capture distances \\ \hline
+Random Brightness & $\pm 10\%$ & Accounts for lighting variation \\ \hline
+\end{tabular}
+\end{table}
+
+The choice of \texttt{fill\_mode="reflect"} was deliberate: it prevents the introduction of black border artefacts that can be misinterpreted as disease features by the CNN. The validation and test sets were left unmodified.
+
+\subsection{Final Dataset Statistics}
+
+\begin{table}[H]
+\centering
+\caption{Final dataset distribution across splits and classes (after augmentation).}
+\label{tab:dataset_stats}
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+\textbf{Split} & \textbf{Acne} & \textbf{Eczema} & \textbf{Tinea} & \textbf{Total} \\ \hline
+Training  & 2{,}880 & 3{,}460 & 1{,}816 & 8{,}156 \\ \hline
+Validation & 93 & 142 & 90 & 325 \\ \hline
+Test & 96 & 137 & 89 & 322 \\ \hline
+\textbf{Total} & \textbf{3{,}069} & \textbf{3{,}739} & \textbf{1{,}995} & \textbf{8{,}803} \\ \hline
+\end{tabular}
+\end{table}
+
+A notable class imbalance exists: Eczema comprises roughly 42.4\% of training samples, while Tinea accounts for only 22.3\%. This imbalance was addressed throughout all training phases using dynamically computed class weights (see Section~\ref{sec:phase1}).
+
+
+% ============================================================
+\section{Variational Autoencoder (VAE) --- Anomaly Detection}
+\label{sec:vae}
+% ============================================================
+
+Before any disease classification takes place, the system must first determine whether the captured image actually contains a skin abnormality. A Variational Autoencoder (VAE) serves as the first stage of the inference pipeline---an anomaly detection gate that filters out images of healthy skin before they reach the classifier.
+
+The core insight behind this approach is straightforward: a VAE trained \textit{exclusively} on normal skin textures learns to reconstruct healthy skin with low error. When presented with a diseased patch, the reconstruction degrades noticeably, and the elevated error signals an anomaly.
+
+\subsection{Normal Skin Patch Extraction}
+
+Before training the VAE, patches of normal skin were extracted from a separate dataset of healthy skin images. Each image was centre-cropped to $256 \times 256$ pixels, the upper 30\% was excluded (to avoid non-skin regions such as eyebrows), and random $64 \times 64$ patches were sampled from the remaining area.
+
+\begin{table}[H]
+\centering
+\caption{Patch extraction parameters for VAE training data.}
+\label{tab:patch_params}
+\begin{tabular}{|l|c|}
+\hline
+\textbf{Parameter} & \textbf{Value} \\ \hline
+Patch size & $64 \times 64$ pixels \\ \hline
+Crop size & $256 \times 256$ pixels \\ \hline
+Maximum patches & 2{,}000 \\ \hline
+Patches per image & 2 \\ \hline
+Excluded region & Top 30\% of image \\ \hline
+\end{tabular}
+\end{table}
+
+\subsection{VAE Architecture}
+
+The VAE was implemented in PyTorch and consists of two complementary sub-networks: an encoder that compresses the input patch into a low-dimensional latent representation, and a decoder that reconstructs the original patch from this representation.
+
+\subsubsection{Encoder}
+
+The encoder applies three successive convolutional layers, each reducing spatial dimensions while increasing the number of feature maps:
+
+\begin{table}[H]
+\centering
+\caption{Encoder architecture of the VAE.}
+\label{tab:encoder}
+\begin{tabular}{|l|c|}
+\hline
+\textbf{Layer} & \textbf{Output Dimension} \\ \hline
+Conv2D ($3 \rightarrow 32$), stride 2 & $32 \times 32 \times 32$ \\ \hline
+Conv2D ($32 \rightarrow 64$), stride 2 & $16 \times 16 \times 64$ \\ \hline
+Conv2D ($64 \rightarrow 128$), stride 2 & $8 \times 8 \times 128$ \\ \hline
+Flatten & 8{,}192 \\ \hline
+\end{tabular}
+\end{table}
+
+The flattened output feeds into two parallel fully connected layers that produce the parameters of the latent distribution: the mean vector $\boldsymbol{\mu}$ and the log-variance vector $\log \boldsymbol{\sigma}^{2}$.
+
+\subsubsection{Reparameterisation Trick}
+
+To allow gradient-based optimisation through the stochastic sampling step, the reparameterisation trick is applied:
+
+\begin{equation}
+\mathbf{z} = \boldsymbol{\mu} + \boldsymbol{\epsilon} \odot \boldsymbol{\sigma}, \quad \boldsymbol{\epsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})
+\end{equation}
+
+This reformulation makes the sampling operation differentiable, enabling end-to-end training via backpropagation.
+
+\subsubsection{Decoder}
+
+The decoder mirrors the encoder, using transposed convolutions to upsample the latent vector back to the original patch dimensions:
+
+\begin{table}[H]
+\centering
+\caption{Decoder architecture of the VAE.}
+\label{tab:decoder}
+\begin{tabular}{|l|c|}
+\hline
+\textbf{Layer} & \textbf{Output Dimension} \\ \hline
+Fully Connected & $8 \times 8 \times 128$ \\ \hline
+ConvTranspose ($128 \rightarrow 64$) & $16 \times 16 \times 64$ \\ \hline
+ConvTranspose ($64 \rightarrow 32$) & $32 \times 32 \times 32$ \\ \hline
+ConvTranspose ($32 \rightarrow 3$) & $64 \times 64 \times 3$ \\ \hline
+\end{tabular}
+\end{table}
+
+A sigmoid activation on the final layer constrains output pixel values to $[0, 1]$. The full architecture is depicted in Figure~\ref{fig:vae_architecture}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.05\textwidth]{Figures/ChatGPT Image Apr 6, 2026, 08_32_03 AM.png}
+    \caption{Variational Autoencoder architecture used for anomaly detection, showing encoder, latent space sampling, and decoder components.}
+    \label{fig:vae_architecture}
+\end{figure}
+
+\subsection{Loss Function}
+
+The VAE is trained by minimising a composite loss that balances faithful reconstruction with a well-structured latent space:
+
+\begin{equation}
+\mathcal{L} = \underbrace{\text{MSE}(\mathbf{x}, \hat{\mathbf{x}})}_{\text{Reconstruction}} \;+\; \underbrace{-\frac{1}{2}\sum_{j=1}^{d}\bigl(1 + \log\sigma_j^{2} - \mu_j^{2} - \sigma_j^{2}\bigr)}_{\text{KL Divergence}}
+\end{equation}
+
+The reconstruction term penalises pixel-level differences, while the KL divergence regularises the latent distribution towards a standard Gaussian $\mathcal{N}(\mathbf{0}, \mathbf{I})$, preventing the model from memorising individual samples.
+
+\subsection{Training Configuration}
+
+\begin{table}[H]
+\centering
+\caption{VAE training hyperparameters.}
+\label{tab:vae_training}
+\begin{tabular}{|l|c|}
+\hline
+\textbf{Parameter} & \textbf{Value} \\ \hline
+Batch size & 64 \\ \hline
+Epochs & 15 \\ \hline
+Learning rate (Adam) & 0.001 \\ \hline
+Latent dimension & 32 \\ \hline
+Input size & $64 \times 64 \times 3$ \\ \hline
+Train / Val / Test split & 70\% / 15\% / 15\% \\ \hline
+\end{tabular}
+\end{table}
+
+After training, the model weights were exported and later converted for mobile deployment (see Section~\ref{sec:tflite}).
+
+\subsection{Sliding Window Anomaly Detection}
+
+At inference time, the input image is divided into overlapping $64 \times 64$ patches using a stride of 32 pixels. Each patch is passed through the VAE, and the per-patch reconstruction error is computed as $\text{MSE}(\mathbf{x}, \hat{\mathbf{x}})$. If this error exceeds a calibrated threshold (0.008 in the TFLite deployment; see Section~\ref{sec:challenges}), the patch is flagged as anomalous.
+
+The overall decision follows:
+
+\begin{equation}
+\text{Anomaly Ratio} = \frac{\text{Number of anomalous patches}}{\text{Total number of patches}}
+\end{equation}
+
+If the anomaly ratio exceeds 20\%, the image is classified as anomalous and forwarded to the CNN classifier. Otherwise, the pipeline short-circuits and returns a ``No skin disease detected'' result.
+
+\subsection{VAE Testing and Validation}
+
+To verify the anomaly detection module, two categories of test images were evaluated.
+
+\subsubsection{Normal Skin Test Case}
+
+\begin{itemize}
+    \item Total patches analysed: 273
+    \item Anomalous patches detected: 10
+    \item Anomaly ratio: 0.037 (below the 0.20 threshold)
+    \item \textbf{Result:} Correctly classified as \textbf{Normal}
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\linewidth]{Figures/Screenshot 2026-03-13 213036.png}
+\caption{VAE reconstruction heatmap for a normal skin image. Uniformly low reconstruction error confirms normal skin texture.}
+\label{fig:vae_normal}
+\end{figure}
+
+\subsubsection{Anomalous Skin Test Case}
+
+\begin{itemize}
+    \item Total patches analysed: 25
+    \item Anomalous patches detected: 11
+    \item Anomaly ratio: 0.44 (above the 0.20 threshold)
+    \item \textbf{Result:} Correctly classified as \textbf{Anomalous}
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\linewidth]{Figures/Screenshot 2026-03-13 213558.png}
+\caption{VAE reconstruction heatmap for an anomalous skin image. High-error regions (warm colours) correspond to visible lesion areas.}
+\label{fig:vae_anomaly}
+\end{figure}
+
+These results confirm that the VAE effectively distinguishes between normal and diseased skin, serving as a reliable first-stage gate for the inference pipeline.
+
+
+% ============================================================
+\section{CNN Classifier Development}
+\label{sec:cnn}
+% ============================================================
+
+With the anomaly detection gate established, the next component is the disease classifier itself. This section documents the iterative model development process, beginning with MobileNetV2 as a lightweight baseline and progressing to EfficientNetB2 for improved accuracy.
+
+\subsection{Training Configuration and Data Pipeline}
+\label{sec:training_config}
+
+All training pipelines shared a consistent data-loading pattern. Images were loaded using \texttt{tf.keras.utils.image\_dataset\_from\_directory} with categorical labels, then processed through an optimised pipeline:
+
+\begin{verbatim}
+AUTOTUNE = tf.data.AUTOTUNE
+train_ds = train_ds.map(
+    lambda x, y: (preprocess_input(x), y),
+    num_parallel_calls=AUTOTUNE
+)
+train_ds = train_ds.cache().prefetch(buffer_size=AUTOTUNE)
+\end{verbatim}
+
+The \texttt{.cache()} call stores the preprocessed dataset in memory after the first epoch, eliminating redundant I/O in all subsequent epochs. The \texttt{.prefetch(AUTOTUNE)} operation overlaps CPU data preparation with GPU computation, maximising hardware utilisation during training on Kaggle.
+
+To address class imbalance, dynamic class weights were computed before each training run using scikit-learn:
+
+\begin{equation}
+w_c = \frac{N}{k \cdot n_c}
+\end{equation}
+
+where $N$ is the total number of samples, $k$ is the number of classes, and $n_c$ is the count for class $c$. Tinea, as the minority class, consistently received the highest weight.
+
+\subsection{Phase 1: MobileNetV2 Transfer Learning (Frozen Backbone)}
+\label{sec:phase1}
+
+\subsubsection{Architecture}
+
+MobileNetV2 was selected as the initial architecture for its lightweight depthwise separable convolutions and inverted residual blocks, which offer a strong balance between classification accuracy and mobile inference efficiency.
+
+The pre-trained ImageNet backbone was imported without its original top layer (\texttt{include\_top=False}) and entirely frozen (\texttt{trainable=False}). A custom classification head was appended:
+
+\begin{itemize}
+    \item \textbf{Global Average Pooling 2D:} Collapses spatial dimensions into a single vector, significantly reducing overfitting risk compared to a traditional flatten layer.
+    \item \textbf{Dropout (0.2):} Randomly deactivates 20\% of neurons during training, forcing more robust feature learning.
+    \item \textbf{Dense (3, softmax):} Outputs a probability distribution across the three target classes.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\textwidth]{Figures/mobile net architecture.png}
+    \caption{Overall architecture of MobileNetV2 showing the sequence of inverted residual blocks with depthwise separable convolutions.}
+    \label{fig:mobilenetv2_arch}
+\end{figure}
+
+\subsubsection{MobileNetV2 Building Blocks}
+
+The architecture relies on two key innovations:
+
+\textbf{Depthwise Separable Convolution.} Traditional convolution applies filters across all input channels simultaneously. MobileNetV2 decomposes this into a depthwise convolution (one filter per channel) followed by a $1 \times 1$ pointwise convolution that combines features across channels, dramatically reducing computation.
+
+\textbf{Inverted Residual Blocks.} Each block (1) expands the feature dimensionality, (2) applies depthwise convolution, (3) projects back to a compact representation, and (4) adds a residual skip connection when input and output dimensions match. The projection layer uses a \textit{linear} activation rather than ReLU, which preserves information in low-dimensional feature spaces.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{Figures/inverted mobilenet.jpg}
+    \caption{Inverted residual block structure used in MobileNetV2.}
+    \label{fig:inverted_residual}
+\end{figure}
+
+\subsubsection{Training Configuration}
+
+\begin{table}[H]
+\centering
+\caption{Phase 1 (MobileNetV2 frozen backbone) training configuration.}
+\label{tab:phase1_config}
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Parameter} & \textbf{Value} \\ \hline
+Input size & $224 \times 224 \times 3$ \\ \hline
+Preprocessing & \texttt{preprocess\_input} (scales to $[-1, 1]$) \\ \hline
+Batch size & 32 \\ \hline
+Optimiser & Adam (lr = $1 \times 10^{-4}$) \\ \hline
+Loss function & Categorical cross-entropy \\ \hline
+Classification head & GAP $\rightarrow$ Dropout(0.2) $\rightarrow$ Dense(3, softmax) \\ \hline
+Callbacks & EarlyStopping (patience=3, restore best weights) \\ \hline
+\end{tabular}
+\end{table}
+
+\subsubsection{Phase 1 Results}
+
+On the held-out test set of 322 images, the frozen model achieved \textbf{75.16\% accuracy} (loss = 0.6093). Performance was reasonable on Acne (F1 = 0.79) and Eczema (F1 = 0.80), but Tinea recall was only 59.55\%. The frozen backbone simply could not capture the specialised biological textures needed for reliable dermatological classification---motivating the fine-tuning phase that follows.
+
+
+\subsection{Phase 2: MobileNetV2 Fine-Tuning}
+\label{sec:phase2}
+
+\subsubsection{Motivation}
+
+While the ImageNet-derived features provide a useful starting point, they are not specialised for dermatological imagery. Fine-tuning adapts the network's higher-level representations to domain-specific visual patterns such as lesion boundaries, pigmentation irregularities, and scaling morphology.
+
+\subsubsection{Layer Unfreezing Strategy}
+
+Let the MobileNetV2 backbone contain $L = 155$ layers $\{l_1, l_2, \ldots, l_{155}\}$. The first 100 layers, which capture low-level features (edges, colour gradients), remained frozen. Layers 100--155, responsible for higher-level semantic features, were unfrozen and updated during training:
+
+\[
+\theta_i^{(t+1)} =
+\begin{cases}
+\theta_i^{(t)} & \text{if } i < 100 \\
+\theta_i^{(t)} - \eta \,\nabla_{\theta_i}\mathcal{L} & \text{if } i \geq 100
+\end{cases}
+\]
+
+\subsubsection{Learning Rate Adjustment}
+
+The learning rate was reduced by a factor of ten relative to Phase~1 to prevent catastrophic forgetting:
+
+\[
+\eta_{\text{Phase\,1}} = 10^{-4} \quad \longrightarrow \quad \eta_{\text{Phase\,2}} = 10^{-5}
+\]
+
+Three callbacks governed the training dynamics:
+\begin{itemize}
+    \item \textbf{EarlyStopping} (patience = 5, monitoring validation loss),
+    \item \textbf{ReduceLROnPlateau} (factor = 0.5, patience = 2, min\_lr = $10^{-6}$),
+    \item \textbf{ModelCheckpoint} (saving only the best validation-loss epoch).
+\end{itemize}
+
+\subsubsection{Training Configuration}
+
+\begin{table}[H]
+\centering
+\caption{Phase 2 (MobileNetV2 fine-tuning) configuration.}
+\label{tab:phase2_config}
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Parameter} & \textbf{Value} \\ \hline
+Base model & MobileNetV2 (ImageNet) \\ \hline
+Total / Frozen / Trainable layers & 155 / 100 / 55 \\ \hline
+Optimiser & Adam (lr = $10^{-5}$) \\ \hline
+Loss function & Categorical cross-entropy \\ \hline
+Batch size & 32 \\ \hline
+Maximum epochs & 30 \\ \hline
+\end{tabular}
+\end{table}
+
+\subsubsection{Phase 2 Results}
+
+Fine-tuning produced the most significant single improvement across all MobileNetV2 experiments: \textbf{84.16\% test accuracy}, a gain of +8.99 percentage points over Phase~1. The test loss improved from 0.6093 to 0.4889. Most notably, Tinea recall surged from 59.55\% to 71.91\%, and Eczema recall reached 91.24\%.
+
+\begin{table}[H]
+\centering
+\caption{Phase 2 per-class classification report on the test set (322 images).}
+\label{tab:phase2_results}
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+\textbf{Class} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{Support} \\ \hline
+Acne & 0.9213 & 0.8542 & 0.8865 & 96 \\ \hline
+Eczema & 0.8065 & 0.9124 & 0.8562 & 137 \\ \hline
+Tinea & 0.8205 & 0.7191 & 0.7665 & 89 \\ \hline
+\textbf{Macro avg} & 0.8494 & 0.8286 & 0.8364 & 322 \\ \hline
+\textbf{Weighted avg} & 0.8446 & 0.8416 & 0.8404 & 322 \\ \hline
+\end{tabular}
+\end{table}
+
+The fine-tuned model was saved as \texttt{mobilenetv2\_finetuned\_model.keras} (23.45\,MB). While these results represented a substantial improvement, the 84\% ceiling motivated exploration of more powerful architectures.
+
+
+\subsection{Transition to EfficientNet}
+\label{sec:efficientnet_transition}
+
+Following the MobileNetV2 experiments, the architecture was upgraded to the EfficientNet family. EfficientNet models achieve higher accuracy at equivalent parameter budgets through \textit{compound scaling}---simultaneously scaling network depth, width, and input resolution using a principled coefficient rather than adjusting each dimension independently.
+
+%% ─────────────────────────────────────────────
+%% DIAGRAM INSTRUCTION — EfficientNet compound scaling
+%% Search: "EfficientNet compound scaling diagram" on Google Images
+%% Look for the diagram from the original Tan & Le (2019) paper showing
+%% width, depth, and resolution scaling compared to baseline
+%% Save as: Figures/efficientnet_scaling.png
+%% ─────────────────────────────────────────────
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{Figures/efficientnet_scaling.png}
+    \caption{EfficientNet compound scaling strategy: width, depth, and input resolution are scaled jointly using a single compound coefficient (adapted from Tan \& Le, 2019).}
+    \label{fig:efficientnet_scaling}
+\end{figure}
+
+Two key design changes distinguished the EfficientNet training from the earlier MobileNetV2 experiments:
+
+\begin{enumerate}
+    \item \textbf{Focal Loss:} Standard categorical cross-entropy was replaced with \texttt{CategoricalFocalCrossentropy($\alpha$, $\gamma=2.0$)}, where $\alpha$ is per-class inverse-frequency weighting. Focal loss down-weights well-classified examples and concentrates the training signal on hard, misclassified samples---particularly beneficial for Tinea.
+
+    \item \textbf{Online Augmentation in the Model Graph:} Augmentation layers (\texttt{RandomFlip}, \texttt{RandomRotation}, \texttt{RandomZoom}, \texttt{RandomTranslation}, \texttt{RandomContrast}, \texttt{RandomBrightness}) were embedded as the first layers of the Keras model. These are applied stochastically during training and automatically bypassed during inference (\texttt{training=False}), eliminating the need for a separate augmentation pipeline.
+\end{enumerate}
+
+
+\subsection{EfficientNetB2 Training}
+\label{sec:b2_training}
+
+EfficientNetB2 operates at a native resolution of $260 \times 260$ pixels and contains approximately 339 layers. Training followed the same two-phase protocol refined during the MobileNetV2 experiments.
+
+\textbf{Phase 1 --- Frozen Backbone:} The entire B2 backbone was frozen. Only the classification head---a 256-unit Dense layer with BatchNormalisation and Dropout(0.45), followed by a 3-class softmax output---was trained using Adam (lr = $10^{-3}$) with focal loss.
+
+\textbf{Phase 2 --- Selective Unfreezing:} The best Phase~1 checkpoint was loaded and the top $\sim$120 layers (from layer 220 onward) were unfrozen. The model was recompiled with lr = $10^{-4}$ and trained for up to 60 epochs. An Eczema weight boost factor of 1.2$\times$ was applied on top of the balanced class weights, calibrated through experimentation to prevent the majority class from compressing per-class performance.
+
+\begin{table}[H]
+\centering
+\caption{EfficientNetB2 training configuration.}
+\label{tab:b2_config}
+\begin{tabular}{|l|c|c|}
+\hline
+\textbf{Parameter} & \textbf{Phase 1} & \textbf{Phase 2} \\ \hline
+Input resolution & $260 \times 260$ & $260 \times 260$ \\ \hline
+Backbone & Frozen & Top $\sim$120 layers unfrozen \\ \hline
+Learning rate & $1 \times 10^{-3}$ & $1 \times 10^{-4}$ \\ \hline
+Loss & Focal ($\gamma = 2.0$) & Focal ($\gamma = 2.0$) \\ \hline
+Max epochs & 20 & 60 \\ \hline
+EarlyStopping patience & 15 & 15 \\ \hline
+ReduceLROnPlateau & factor=0.3, patience=8 & factor=0.3, patience=8 \\ \hline
+\end{tabular}
+\end{table}
+
+\subsubsection{EfficientNetB2 Results}
+
+The trained EfficientNetB2 model achieved \textbf{90.46\% validation accuracy} on the 325-sample held-out set, with the following per-class breakdown:
+
+\begin{table}[H]
+\centering
+\caption{EfficientNetB2 per-class validation performance.}
+\label{tab:b2_results}
+\begin{tabular}{|l|c|l|}
+\hline
+\textbf{Class} & \textbf{Accuracy} & \textbf{Notes} \\ \hline
+Acne & 94.62\% & Strongest performing class \\ \hline
+Eczema & 91.55\% & Boosted via class weight adjustment \\ \hline
+Tinea & 87.78\% & Minority class; focal loss improved recall \\ \hline
+\textbf{Overall} & \textbf{90.46\%} & \textbf{Deployed model} \\ \hline
+\end{tabular}
+\end{table}
+
+This represents a gain of 6.3 percentage points over the best MobileNetV2 result, driven by EfficientNet's compound scaling and the switch to focal loss. The EfficientNetB2 model was selected as the production classifier and converted for on-device deployment (see Appendix~\ref{app:training_code}).
+
+
+% ============================================================
+\section{Score-CAM Explainability}
+\label{sec:scorecam}
+% ============================================================
+
+A clinical decision-support tool that provides a diagnosis without any visual justification offers limited utility to healthcare professionals. To address this, the system generates a \textbf{Score-CAM} (Score-weighted Class Activation Map) heatmap that highlights which regions of the input image most strongly influenced the classifier's decision.
+
+\subsection{Why Score-CAM?}
+
+Unlike Grad-CAM, which requires gradient computation, Score-CAM is entirely gradient-free. It determines channel importance by observing how the model's output probability changes when different spatial attention masks are applied to the input. This property is critical for our system because TFLite models deployed on mobile devices \textit{do not support gradient computation}.
+
+\subsection{Algorithm}
+
+The Score-CAM procedure operates in six steps:
+
+\begin{enumerate}
+    \item \textbf{Feature Extraction:} The input image (resized to $260 \times 260$) is fed through the EfficientNetB2 feature extractor, producing a tensor of shape $(1, 9, 9, 1408)$---1{,}408 channels, each a $9 \times 9$ spatial activation map.
+
+    \item \textbf{Top-K Channel Selection:} Channels are ranked by mean absolute activation magnitude. Only the top $K = 30$ channels are retained, reducing the number of forward passes from 1{,}408 to 30 and keeping inference time under 3 seconds on a mid-range smartphone.
+
+    \item \textbf{Masked Forward Passes:} For each selected channel, the $9 \times 9$ activation map is upsampled to $260 \times 260$ and normalised to $[0, 1]$. The resulting attention mask is element-wise multiplied with the original image, and the masked image is classified. The predicted probability for the target class becomes that channel's importance score.
+
+    \item \textbf{Score Normalisation:} The 30 raw importance scores are passed through a numerically stable softmax to produce normalised weights summing to 1.
+
+    \item \textbf{Weighted Heatmap:} The final heatmap is a weighted sum of the 30 upsampled activation maps, followed by a ReLU to remove negative contributions and min-max normalisation to $[0, 1]$.
+
+    \item \textbf{Visualisation:} The heatmap is colourised using a jet colourmap (blue = low importance, red = high importance), resized to the original image dimensions, and alpha-blended with the original image at a 60\%/40\% ratio (original/heatmap).
+\end{enumerate}
+
+%% ─────────────────────────────────────────────
+%% DIAGRAM INSTRUCTION — Score-CAM process
+%% Search: "Score-CAM algorithm diagram" or "Score-CAM pipeline"
+%% on Google Images. Look for the figure from the original
+%% Wang et al. (2020) paper showing the channel masking process.
+%% Save as: Figures/scorecam_pipeline.png
+%% ─────────────────────────────────────────────
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{Figures/scorecam_pipeline.png}
+    \caption{Score-CAM pipeline: activation maps are used as spatial masks on the input image, and the resulting class probabilities serve as channel importance weights (adapted from Wang et al., 2020).}
+    \label{fig:scorecam_pipeline}
+\end{figure}
+
+
+% ============================================================
+\section{TFLite Model Conversion and Deployment}
+\label{sec:tflite}
+% ============================================================
+
+All three models in the inference pipeline were converted from their training formats (Keras for EfficientNetB2, PyTorch for the VAE) to TensorFlow Lite for on-device execution. Conversion applied dynamic range quantisation via \texttt{tf.lite.Optimize.DEFAULT}, reducing model size and improving inference latency on mobile hardware.
+
+\begin{table}[H]
+\centering
+\caption{TFLite models bundled in the application.}
+\label{tab:tflite_models}
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{File} & \textbf{Purpose} & \textbf{Input Shape} & \textbf{Input Range} \\ \hline
+\texttt{vae\_model.tflite} & VAE anomaly gate & $(1, 64, 64, 3)$ float32 & $[0, 1]$ \\ \hline
+\texttt{cnn\_b2\_model.tflite} & EfficientNetB2 classifier & $(1, 260, 260, 3)$ float32 & $[0, 255]$ \\ \hline
+\texttt{b2\_feature\_extractor.tflite} & Score-CAM features & $(1, 260, 260, 3)$ float32 & $[0, 255]$ \\ \hline
+\end{tabular}
+\end{table}
+
+A critical implementation detail: EfficientNetB2 includes an internal \texttt{Rescaling(1/255)} layer baked into the model graph, so the application passes \textit{raw} $[0, 255]$ pixel values. The VAE, which was built without such a layer, requires pre-normalised $[0, 1]$ input. Mixing up these ranges was one of the most subtle bugs encountered during integration (see Section~\ref{sec:challenges}).
+
+The training-time augmentation layers embedded in the EfficientNet model graph are automatically stripped by the TFLite converter, as they evaluate to no-ops when \texttt{training=False}.
+
+
+% ============================================================
+\section{Flutter Mobile Application}
+\label{sec:flutter}
+% ============================================================
+
+The mobile application was developed using Flutter, enabling cross-platform deployment on both Android and iOS from a single codebase. The application handles the complete user journey, from account creation through image capture, real-time AI analysis, and scan history management---all operating entirely offline after initial installation.
+
+\subsection{Application Architecture}
+
+The codebase follows a feature-based directory structure that cleanly separates concerns:
+
+\begin{verbatim}
+Flutter/lib/
+├── main.dart                       # App entry, ProviderScope
+├── core/
+│   ├── routing/app_router.dart     # GoRouter configuration
+│   ├── theme/app_theme.dart        # Light and dark themes
+│   └── widgets/                    # Shared UI components
+├── features/
+│   ├── onboarding/screens/         # Welcome, Login, Role, PersonalInfo
+│   ├── core_workflow/screens/      # Home, Capture, Analyzing, History
+│   └── results/screens/            # DiagnosisResult
+├── models/                         # scan_result.dart, user.dart
+├── providers/                      # Riverpod state management
+└── services/
+    ├── ai/ai_service.dart          # Three-stage inference pipeline
+    └── database/database_service.dart
+\end{verbatim}
+
+\subsection{State Management}
+
+Riverpod was chosen over BLoC or the basic Provider package for three reasons: (1)~compile-time type safety, (2)~independence from the widget tree (providers are accessible without a \texttt{BuildContext}), and (3)~clean handling of asynchronous inference states through \texttt{AsyncValue}, which naturally maps to the loading/success/error states of the AI pipeline.
+
+\subsection{Navigation}
+
+All routing is handled declaratively through \texttt{go\_router}. Route paths are defined as typed constants in an \texttt{AppRoutes} class, eliminating hard-coded string errors. The user journey proceeds through three distinct phases:
+
+\begin{itemize}
+    \item \textbf{Onboarding:} Welcome $\rightarrow$ Login $\rightarrow$ Role Selection $\rightarrow$ Personal Info $\rightarrow$ All Set
+    \item \textbf{Core Workflow:} Home $\rightarrow$ Body Part Selection $\rightarrow$ Capture $\rightarrow$ Analysing $\rightarrow$ Result
+    \item \textbf{Auxiliary:} History, Profile, Edit Profile, Notifications, Help \& Support
+\end{itemize}
+
+\subsection{AI Service Integration}
+
+The \texttt{AIService} singleton exposes the full three-stage inference pipeline through a single asynchronous method (see Appendix~\ref{app:ai_service}):
+
+\begin{verbatim}
+Future<AnalysisResult> analyzeImage({
+  required String imagePath,
+  void Function(int step)? onStepChange,
+}) async { ... }
+\end{verbatim}
+
+The three TFLite interpreters (VAE, B2 classifier, and B2 feature extractor) are loaded lazily on first call and held in memory for the application's lifetime. To maintain UI responsiveness during the 30-iteration Score-CAM loop, the computation yields to the Flutter event loop every five iterations:
+
+\begin{verbatim}
+if (ki % 5 == 0) await Future.delayed(Duration.zero);
+\end{verbatim}
+
+\subsection{Local Database}
+
+Scan history and user data are persisted via SQLite (\texttt{sqflite}). The schema includes two tables---\texttt{scans} and \texttt{users}---with JSON-encoded class probabilities stored alongside each scan record (see Appendix~\ref{app:db_schema}).
+
+\subsection{User Interface Walkthrough}
+
+The application provides a polished, production-ready interface with both light and dark themes. The key screens are presented below.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.35\textwidth]{Figures/screenshot_welcome.png}
+    \caption{Welcome screen with animated entry and navigation to login/registration.}
+    \label{fig:ui_welcome}
+\end{figure}
+
+%% ─────────────────────────────────────────────
+%% SCREENSHOT INSTRUCTION — screenshot_welcome.png
+%% Open the app on emulator or device → Take screenshot of the Welcome screen
+%% showing the app logo, tagline, and Get Started button.
+%% Save as: Figures/screenshot_welcome.png
+%% ─────────────────────────────────────────────
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.35\textwidth]{Figures/screenshot_login.png}
+    \caption{Login screen with email/password fields and role-based authentication.}
+    \label{fig:ui_login}
+\end{figure}
+
+%% ─────────────────────────────────────────────
+%% SCREENSHOT INSTRUCTION — screenshot_login.png
+%% Take screenshot of the Login screen showing email field,
+%% password field, and login button.
+%% Save as: Figures/screenshot_login.png
+%% ─────────────────────────────────────────────
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.35\textwidth]{Figures/screenshot_home.png}
+    \caption{Home dashboard displaying quick-action scan button, recent history summary, and navigation drawer.}
+    \label{fig:ui_home}
+\end{figure}
+
+%% ─────────────────────────────────────────────
+%% SCREENSHOT INSTRUCTION — screenshot_home.png
+%% Take screenshot of the Home/Dashboard screen showing the main
+%% scan button, recent scans preview, and navigation elements.
+%% Save as: Figures/screenshot_home.png
+%% ─────────────────────────────────────────────
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.35\textwidth]{Figures/screenshot_bodypart.png}
+    \caption{Body part selection screen with front/back anatomical map for specifying the affected region.}
+    \label{fig:ui_bodypart}
+\end{figure}
+
+%% ─────────────────────────────────────────────
+%% SCREENSHOT INSTRUCTION — screenshot_bodypart.png
+%% Take screenshot of the Body Part Selection screen showing
+%% the anatomical figure (front view) with tappable body regions.
+%% Save as: Figures/screenshot_bodypart.png
+%% ─────────────────────────────────────────────
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.35\textwidth]{Figures/screenshot_capture.png}
+    \caption{Capture screen with camera preview and gallery upload option.}
+    \label{fig:ui_capture}
+\end{figure}
+
+%% ─────────────────────────────────────────────
+%% SCREENSHOT INSTRUCTION — screenshot_capture.png
+%% Take screenshot of the Capture screen showing the camera
+%% viewfinder, capture button, and gallery upload icon.
+%% Save as: Figures/screenshot_capture.png
+%% ─────────────────────────────────────────────
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.35\textwidth]{Figures/screenshot_analyzing.png}
+    \caption{Analysing screen showing real-time pipeline progress as each inference stage completes.}
+    \label{fig:ui_analyzing}
+\end{figure}
+
+%% ─────────────────────────────────────────────
+%% SCREENSHOT INSTRUCTION — screenshot_analyzing.png
+%% Take screenshot of the Analyzing screen showing the step
+%% indicators (Preprocessing, VAE, CNN, Score-CAM) with at least
+%% one step completed and one in progress.
+%% Save as: Figures/screenshot_analyzing.png
+%% ─────────────────────────────────────────────
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.35\textwidth]{Figures/screenshot_result.png}
+    \caption{Diagnosis result screen showing the predicted condition, confidence score, per-class probabilities, and Score-CAM heatmap overlay.}
+    \label{fig:ui_result}
+\end{figure}
+
+%% ─────────────────────────────────────────────
+%% SCREENSHOT INSTRUCTION — screenshot_result.png
+%% Take screenshot of the Diagnosis Result screen showing:
+%% - The diagnosis label (e.g., "Eczema")
+%% - Confidence percentage
+%% - The Score-CAM heatmap image overlaid on the skin photo
+%% - Per-class probability bars
+%% Save as: Figures/screenshot_result.png
+%% ─────────────────────────────────────────────
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.35\textwidth]{Figures/screenshot_history.png}
+    \caption{Scan history screen listing previous diagnoses with timestamps, body part, and confidence scores.}
+    \label{fig:ui_history}
+\end{figure}
+
+%% ─────────────────────────────────────────────
+%% SCREENSHOT INSTRUCTION — screenshot_history.png
+%% Take screenshot of the History screen showing a list of
+%% previous scan entries with diagnosis, date, and confidence.
+%% Save as: Figures/screenshot_history.png
+%% ─────────────────────────────────────────────
+
+
+% ============================================================
+\section{Implementation Challenges and Solutions}
+\label{sec:challenges}
+% ============================================================
+
+Several non-trivial technical challenges emerged during system integration. Each was diagnosed systematically before the system was deployed.
+
+\subsection{Preprocessing Mismatch Between Training and Inference}
+
+\textbf{Problem:} EfficientNetB2 was trained with an internal \texttt{Rescaling(1/255)} layer. During initial TFLite integration, the application was normalising pixel values to $[0, 1]$ before passing them to the interpreter, resulting in double normalisation and near-zero classifier activations.
+
+\textbf{Resolution:} Raw $[0, 255]$ pixel values are now passed to the EfficientNetB2 model, while $[0, 1]$ normalisation is retained only for the VAE. Two separate helper functions---\texttt{fillFloat32Raw()} and \texttt{fillFloat32()}---handle the two normalisation modes (see Appendix~\ref{app:preprocessing}).
+
+\subsection{VAE Threshold Calibration Across Frameworks}
+
+\textbf{Problem:} The VAE was originally calibrated in PyTorch with an MSE anomaly threshold of 0.006. After conversion to TFLite, a systematic offset of approximately +0.002 was observed, attributable to floating-point precision differences and dynamic range quantisation.
+
+\textbf{Resolution:} The threshold was recalibrated empirically to 0.008 for the TFLite runtime, producing equivalent anomaly detection behaviour to the original PyTorch model.
+
+\subsection{UI Responsiveness During Score-CAM}
+
+\textbf{Problem:} The 30-iteration Score-CAM loop ran synchronously on the main Dart isolate, causing dropped frames and a frozen analysing-screen animation.
+
+\textbf{Resolution:} Inserting \texttt{await Future.delayed(Duration.zero)} every 5 iterations yields control to the Flutter event loop, allowing animations to continue without perceptible interruption.
+
+\subsection{MobileNetV2 Over-Regularisation (Phase 3 Experiment)}
+
+During development, an additional MobileNetV2 training phase explored aggressive regularisation (dropout 0.5, label smoothing 0.2, MixUp augmentation, cosine LR decay). The result was 73.91\% accuracy---\textit{below} Phase~2's 84.16\%---due to the combined constraints preventing convergence from a less-adapted starting checkpoint. This negative result was instrumental in motivating the clean two-phase protocol adopted for EfficientNet training.
+
+
+% ============================================================
+\section{Model Performance Summary}
+\label{sec:summary}
+% ============================================================
+
+Table~\ref{tab:model_summary} summarises the classification accuracy achieved across all training phases.
+
+\begin{table}[H]
+\centering
+\caption{Training phase summary and model progression.}
+\label{tab:model_summary}
+\begin{tabular}{|l|l|l|c|c|}
+\hline
+\textbf{Phase} & \textbf{Architecture} & \textbf{Key Technique} & \textbf{Accuracy} & \textbf{Deployed?} \\ \hline
+Phase 1 & MobileNetV2 & Frozen backbone, GAP head & 75.16\% & No \\ \hline
+Phase 2 & MobileNetV2 & Top 55 layers unfrozen & 84.16\% & No \\ \hline
+Phase 3 & MobileNetV2 & Over-regularisation experiment & 73.91\% & No \\ \hline
+Phase 4 & EfficientNetB0 & Focal loss, online augmentation & 84.62\% & No \\ \hline
+\textbf{Final} & \textbf{EfficientNetB2} & \textbf{Focal loss, two-phase training} & \textbf{90.46\%} & \textbf{Yes} \\ \hline
+\end{tabular}
+\end{table}
+
+The progression from MobileNetV2 (84.16\%) to EfficientNetB2 (90.46\%) represents a gain of 6.3 percentage points, driven primarily by compound scaling and the substitution of standard cross-entropy with focal loss for improved class-imbalance handling. The EfficientNetB2 model is the production-deployed classifier, converted to TFLite and bundled with the Flutter application as a fully offline, on-device inference engine.
+
+
+% ============================================================
+% APPENDIX
+% ============================================================
+\appendix
+\chapter{Selected Code Listings}
+\label{app:code}
+
+This appendix presents selected code excerpts from the implementation. Each listing is referenced from the corresponding section in Chapter~4.
+
+\section{EfficientNetB2 Training Script (Excerpt)}
+\label{app:training_code}
+
+The following excerpt shows the two-phase training procedure for EfficientNetB2, referenced in Section~\ref{sec:b2_training}.
+
+\begin{verbatim}
+# --- Phase 1: Frozen backbone ---
+base_model = EfficientNetB2(
+    weights="imagenet", include_top=False,
+    input_shape=(260, 260, 3)
+)
+base_model.trainable = False
+
+inputs = tf.keras.Input(shape=(260, 260, 3))
+x = data_augmentation(inputs)        # online augmentation layers
+x = base_model(x, training=False)
+x = layers.GlobalAveragePooling2D()(x)
+x = layers.BatchNormalization()(x)
+x = layers.Dropout(0.45)(x)
+x = layers.Dense(256, activation='relu')(x)
+x = layers.BatchNormalization()(x)
+x = layers.Dropout(0.45)(x)
+outputs = layers.Dense(3, activation='softmax')(x)
+model = models.Model(inputs, outputs)
+
+model.compile(
+    optimizer=Adam(learning_rate=1e-3),
+    loss=CategoricalFocalCrossentropy(alpha=alpha, gamma=2.0),
+    metrics=['accuracy']
+)
+
+model.fit(train_ds, validation_data=val_ds,
+          epochs=20, class_weight=class_weights,
+          callbacks=[early_stop, reduce_lr, checkpoint])
+
+# --- Phase 2: Selective unfreezing ---
+base_model.trainable = True
+for layer in base_model.layers[:220]:
+    layer.trainable = False    # freeze first 220 layers
+
+model.compile(
+    optimizer=Adam(learning_rate=1e-4),
+    loss=CategoricalFocalCrossentropy(alpha=alpha, gamma=2.0),
+    metrics=['accuracy']
+)
+
+model.fit(train_ds, validation_data=val_ds,
+          epochs=60, class_weight=class_weights_boosted,
+          callbacks=[early_stop, reduce_lr, checkpoint])
+\end{verbatim}
+
+\section{AI Service --- Inference Pipeline (Excerpt)}
+\label{app:ai_service}
+
+The Flutter \texttt{AIService} singleton orchestrates the three-stage pipeline, referenced in Section~\ref{sec:flutter}.
+
+\begin{verbatim}
+Future<AnalysisResult> analyzeImage({
+  required String imagePath,
+  void Function(int step)? onStepChange,
+}) async {
+  await _ensureModelsLoaded();
+  final originalImage = await _loadImage(imagePath);
+
+  // Stage 1: VAE anomaly detection
+  onStepChange?.call(1);
+  final isAnomalous = await _runVaeDetection(originalImage);
+  if (!isAnomalous) {
+    return AnalysisResult(isNormal: true, diagnosis: 'Normal');
+  }
+
+  // Stage 2: EfficientNetB2 classification
+  onStepChange?.call(2);
+  final probs = await _runClassification(originalImage);
+  final predIdx = _argmax(probs);
+  final diagnosis = _classes[predIdx];
+
+  // Stage 3: Score-CAM heatmap generation
+  onStepChange?.call(3);
+  final heatmapPath = await _generateScoreCam(
+      originalImage, predIdx);
+
+  return AnalysisResult(
+    isNormal: false,
+    diagnosis: diagnosis,
+    confidence: probs[predIdx],
+    classProbabilities: Map.fromIterables(_classes, probs),
+    heatmapPath: heatmapPath,
+  );
+}
+\end{verbatim}
+
+\section{Database Schema}
+\label{app:db_schema}
+
+The SQLite schema for local persistence, referenced in Section~\ref{sec:flutter}.
+
+\begin{verbatim}
+CREATE TABLE scans (
+  id                  TEXT    PRIMARY KEY,
+  image_path          TEXT    NOT NULL,
+  body_part           TEXT    NOT NULL,
+  diagnosis           TEXT    NOT NULL,
+  confidence          REAL    NOT NULL,
+  class_probabilities TEXT    NOT NULL,  -- JSON map
+  timestamp           INTEGER NOT NULL,
+  notes               TEXT,
+  heatmap_path        TEXT
+);
+
+CREATE TABLE users (
+  id              TEXT    PRIMARY KEY,
+  name            TEXT    NOT NULL,
+  email           TEXT    NOT NULL UNIQUE,
+  password        TEXT    NOT NULL,
+  role            TEXT    NOT NULL DEFAULT 'patient',
+  age             INTEGER,
+  gender          TEXT,
+  medical_history TEXT,
+  created_at      INTEGER NOT NULL
+);
+\end{verbatim}
+
+\section{Preprocessing Helper Functions}
+\label{app:preprocessing}
+
+The two normalisation modes for VAE vs.\ EfficientNet inputs, referenced in Section~\ref{sec:challenges}.
+
+\begin{verbatim}
+/// VAE input: normalise to [0, 1]
+void _fillFloat32(Image img, ByteBuffer buf, int w, int h) {
+  var list = buf.asFloat32List();
+  int idx = 0;
+  for (int y = 0; y < h; y++) {
+    for (int x = 0; x < w; x++) {
+      final pixel = img.getPixel(x, y);
+      list[idx++] = pixel.r / 255.0;
+      list[idx++] = pixel.g / 255.0;
+      list[idx++] = pixel.b / 255.0;
+    }
+  }
+}
+
+/// EfficientNet input: raw [0, 255] — model has internal Rescaling
+void _fillFloat32Raw(Image img, ByteBuffer buf, int w, int h) {
+  var list = buf.asFloat32List();
+  int idx = 0;
+  for (int y = 0; y < h; y++) {
+    for (int x = 0; x < w; x++) {
+      final pixel = img.getPixel(x, y);
+      list[idx++] = pixel.r.toDouble();
+      list[idx++] = pixel.g.toDouble();
+      list[idx++] = pixel.b.toDouble();
+    }
+  }
+}
+\end{verbatim}

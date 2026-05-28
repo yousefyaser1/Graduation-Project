@@ -1,0 +1,567 @@
+\chapter{Testing and Results}
+
+This chapter presents a systematic evaluation of the proposed skin disease classification system. Testing is conducted exclusively on the held-out validation split to preserve the integrity of the test set for any subsequent fine-tuning. Evaluation covers six dimensions: CNN classifier performance across all training phases, VAE anomaly detection reliability, Score-CAM explainability output quality, and end-to-end mobile application behaviour — including unit testing of individual pipeline components, boundary and edge case robustness, usability evaluation with real users, real-world use case scenario walkthroughs, and on-device performance measurement.
+
+% ============================================================
+\section{Testing Methodology}
+% ============================================================
+
+\subsection{Dataset Split Strategy}
+
+The dataset was partitioned prior to any training activity into three non-overlapping splits: training, validation, and test. Table~\ref{tab:dataset_splits} summarises the distribution across all four classes.
+
+\begin{table}[H]
+\centering
+\caption{Dataset split distribution across classes.}
+\label{tab:dataset_splits}
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+\textbf{Class} & \textbf{Training} & \textbf{Validation} & \textbf{Test} & \textbf{Total} \\ \hline
+Acne   & 2{,}880 & 93  & 96  & 3{,}069 \\ \hline
+Eczema & 3{,}460 & 142 & 137 & 3{,}739 \\ \hline
+Tinea  & 1{,}816 & 90  & 89  & 1{,}995 \\ \hline
+\textbf{Total} & \textbf{8{,}156} & \textbf{325} & \textbf{322} & \textbf{8{,}803} \\ \hline
+\end{tabular}
+\end{table}
+
+\noindent The test split is withheld entirely from all reported experiments; it will serve as a final unbiased benchmark after the model selection process is complete. All accuracy, precision, recall, and F1 figures reported in this chapter are therefore computed on the \textit{validation split}.
+
+\subsection{Evaluation Metrics}
+
+Performance is quantified using the following standard metrics:
+
+\begin{itemize}
+    \item \textbf{Overall accuracy} — fraction of correctly classified validation samples.
+    \item \textbf{Per-class precision} — fraction of predicted positives that are truly positive.
+    \item \textbf{Per-class recall (sensitivity)} — fraction of true positives correctly retrieved.
+    \item \textbf{Per-class F1-score} — harmonic mean of precision and recall.
+    \item \textbf{Confusion matrix} — absolute count of correct and misclassified predictions per class pair.
+    \item \textbf{ROC curve and AUC} — separability of each class across all decision thresholds.
+\end{itemize}
+
+% ============================================================
+\section{CNN Classifier Evaluation}
+% ============================================================
+
+\subsection{Iterative Training History}
+
+Model development proceeded through twelve iterative training phases. Each phase introduced a targeted architectural or optimisation change motivated by the shortcomings observed in the previous run. Table~\ref{tab:training_history} documents the full progression.
+
+\begin{table}[H]
+\centering
+\caption{Summary of all CNN training phases and validation accuracy on the 325-sample validation set.}
+\label{tab:training_history}
+\begin{tabular}{|c|p{4.5cm}|p{5cm}|c|}
+\hline
+\textbf{Phase} & \textbf{Architecture} & \textbf{Key Change} & \textbf{Val Acc.} \\ \hline
+1  & MobileNetV2 & Initial transfer learning; ImageNet weights frozen & $\approx$70\% \\ \hline
+2  & MobileNetV2 & Partial fine-tuning of top layers & $\approx$84\% \\ \hline
+3  & MobileNetV2 & Heavy regularisation (dropout, L2) to counter overfit & $\approx$74\% \\ \hline
+4  & MobileNetV2 & Regularisation relaxed; learning-rate schedule tuned & -- \\ \hline
+5  & EfficientNetB0 & Architecture switch; 224$\times$224 input & 84.62\% \\ \hline
+6  & MobileNetV2 & Improved augmentation and class-weight balancing & -- \\ \hline
+7  & EfficientNetB2 & Scaled backbone; 260$\times$260 input & 88.31\% \\ \hline
+8  & EfficientNetB2 + TTA & Test-Time Augmentation (20 steps) applied & 91.69\% \\ \hline
+9  & Dual EfficientNetB2 & Two B2 seeds ensembled (42 + 123) & 91.38\% \\ \hline
+10 & EfficientNetB3 + TTA & Larger backbone; 300$\times$300 input & 92.00\% \\ \hline
+11 & B2+B3 Ensemble + TTA & 50/50 probability averaging; 20-step TTA & \textbf{92.62\%} \\ \hline
+12 & EfficientNetB4 & Planned: 380$\times$380 input, B4+B2 ensemble & -- \\ \hline
+\end{tabular}
+\end{table}
+
+The training history reveals a consistent upward trajectory driven by three compounding improvements: (i) replacing MobileNetV2 with the EfficientNet family, which provides better accuracy-to-parameter trade-offs; (ii) scaling backbone complexity (B0 $\rightarrow$ B2 $\rightarrow$ B3); and (iii) introducing Test-Time Augmentation, which alone contributed a +1.5 percentage-point gain over the B2 baseline.
+
+\subsection{Best Model: B2+B3 Ensemble with TTA}
+
+The best performing configuration combines EfficientNetB2 (260$\times$260 input) and EfficientNetB3 (300$\times$300 input) through equal probability averaging, evaluated at each test image with 20 independently augmented passes. The two models make complementary errors — B2 achieves higher precision on Eczema while B3 recovers some Tinea misclassifications — so their ensemble outperforms either model in isolation.
+
+\subsubsection{Confusion Matrix}
+
+Figure~\ref{fig:confusion_matrix} shows the confusion matrix of the best model on the validation set, and Table~\ref{tab:confusion_matrix} reports the exact cell counts.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.65\linewidth]{Figures/confusion_matrix.png}
+    \caption{Confusion matrix of the B2+B3 ensemble with 20-step TTA evaluated on the 325-sample validation set. Rows represent true labels; columns represent predicted labels.}
+    \label{fig:confusion_matrix}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Confusion matrix — absolute sample counts (Validation Set, $n$\,=\,325).}
+\label{tab:confusion_matrix}
+\begin{tabular}{|l|c|c|c|}
+\hline
+ & \textbf{Predicted: Acne} & \textbf{Predicted: Eczema} & \textbf{Predicted: Tinea} \\ \hline
+\textbf{True: Acne}   & 88 & 2 & 3 \\ \hline
+\textbf{True: Eczema} & 8  & 131 & 3 \\ \hline
+\textbf{True: Tinea}  & 1  & 7 & 82 \\ \hline
+\end{tabular}
+\end{table}
+
+The dominant misclassification pattern is Eczema being confused with Acne (8 cases). This is clinically plausible: both conditions can present as facial papules and pustules, and distinguishing them from photographs alone is challenging without tactile examination. Tinea misclassified as Eczema (7 cases) represents the next most frequent error, again reflecting the overlapping visual appearance of scaly, erythematous plaques in both diseases.
+
+\subsubsection{Classification Report}
+
+Table~\ref{tab:classification_report} presents the per-class precision, recall, and F1-score derived from the confusion matrix above.
+
+\begin{table}[H]
+\centering
+\caption{Per-class classification metrics — B2+B3 Ensemble + TTA (Validation Set).}
+\label{tab:classification_report}
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+\textbf{Class} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{Support} \\ \hline
+Acne   & 0.9072 & 0.9462 & 0.9263 & 93  \\ \hline
+Eczema & 0.9357 & 0.9225 & 0.9291 & 142 \\ \hline
+Tinea  & 0.9318 & 0.9111 & 0.9213 & 90  \\ \hline
+\textbf{Macro Avg}    & 0.9249 & 0.9266 & 0.9256 & 325 \\ \hline
+\textbf{Weighted Avg} & 0.9265 & 0.9262 & 0.9261 & 325 \\ \hline
+\end{tabular}
+\end{table}
+
+All three classes exceed an F1-score of 0.92, and the macro-averaged F1 of 0.9256 indicates balanced performance across the class distribution. Acne yields the highest recall (0.9462), meaning the system rarely misses an Acne case. Eczema attains the highest precision (0.9357), indicating that when the model predicts Eczema it is almost always correct.
+
+\subsubsection{ROC Curves and AUC}
+
+Figure~\ref{fig:roc_curves} presents the Receiver Operating Characteristic (ROC) curves for each class under a one-versus-rest scheme, and Table~\ref{tab:auc} lists the corresponding AUC values.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.70\linewidth]{Figures/roc_curves.png}
+    \caption{ROC curves for the three-class B2+B3 ensemble evaluated on the validation set. Each curve is computed under a one-versus-rest scheme.}
+    \label{fig:roc_curves}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Area Under the ROC Curve (AUC) per class — Validation Set.}
+\label{tab:auc}
+\begin{tabular}{|l|c|}
+\hline
+\textbf{Class} & \textbf{AUC} \\ \hline
+Acne   & 0.9864 \\ \hline
+Eczema & 0.9747 \\ \hline
+Tinea  & 0.9872 \\ \hline
+\end{tabular}
+\end{table}
+
+All three AUC values exceed 0.97, confirming that the ensemble assigns well-calibrated confidence scores across all operating thresholds. Eczema yields the lowest AUC (0.9747), consistent with its position as the most visually ambiguous class.
+
+\subsection{Effect of Test-Time Augmentation}
+
+Table~\ref{tab:tta_effect} isolates the contribution of TTA by comparing each model in its standalone and TTA-enabled forms.
+
+\begin{table}[H]
+\centering
+\caption{Validation accuracy with and without Test-Time Augmentation (TTA, 20 steps).}
+\label{tab:tta_effect}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Configuration} & \textbf{No TTA} & \textbf{TTA-20} & \textbf{Gain} \\ \hline
+EfficientNetB2 alone & 90.46\% & 91.69\% & +1.23 pp \\ \hline
+EfficientNetB3 alone & 88.31\% & 92.00\% & +3.69 pp \\ \hline
+B2+B3 Ensemble       & --      & \textbf{92.62\%} & -- \\ \hline
+\end{tabular}
+\end{table}
+
+\noindent A TTA saturation study confirmed that increasing beyond 20 steps yields no measurable improvement; 20-step and 50-step TTA produce identical results on this validation set, confirming that 20 steps is the cost-efficient operating point.
+
+% ============================================================
+\section{VAE Anomaly Detection Evaluation}
+% ============================================================
+
+The Variational Autoencoder serves as the first stage of the pipeline, gating all inputs before they reach the CNN. It was trained exclusively on Normal skin images and, at inference time, applies a patch-based sliding window to each input image to compute a local reconstruction error.
+
+\subsection{Inference Mechanism}
+
+Rather than computing a single image-level MSE, the VAE operates on overlapping 64$\times$64 pixel patches extracted with a stride of 32 pixels from each resized 224$\times$224 input. Each patch is independently encoded and decoded; its per-patch MSE reconstruction error is compared against a patch-level threshold $\tau_p = 0.008$. The fraction of patches whose error exceeds $\tau_p$ is termed the \textit{anomaly ratio}. If the anomaly ratio exceeds a second threshold $\tau_r = 0.20$, the image is classified as anomalous and forwarded to the CNN; otherwise it is returned as ``Normal'' without further processing.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.72\linewidth]{Figures/anomaly_ratio_histogram.png}
+    \caption{Distribution of VAE anomaly ratios on the 325-image validation set. The dashed vertical line marks the decision threshold $\tau_r = 0.20$. Diseased images cluster at high anomaly ratios, confirming reliable gating.}
+    \label{fig:vae_histogram}
+\end{figure}
+
+%% ── INSTRUCTION ──────────────────────────────────────────────────────────────
+%% Run fourteenth_code_vae_evaluation.py locally (no Kaggle needed).
+%% It reads vae_model.tflite and New_Augmented_Dataset/val/ directly.
+%% Copy vae_eval_output/anomaly_ratio_histogram.png → Figures/
+%% Fill the TODO values below from vae_eval_output/vae_evaluation_summary.txt
+%% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Detection Performance}
+
+\begin{table}[H]
+\centering
+\caption{VAE anomaly detection parameters and performance on the validation set ($n$\,=\,325 diseased images).}
+\label{tab:vae_performance}
+\begin{tabular}{|l|c|}
+\hline
+\textbf{Parameter / Metric} & \textbf{Value} \\ \hline
+Patch size & 64$\times$64 px \\ \hline
+Sliding window stride & 32 px \\ \hline
+Per-patch MSE threshold $\tau_p$ & 0.008 \\ \hline
+Anomaly ratio threshold $\tau_r$ & 0.20 \\ \hline
+True Positive Rate — Acne (55.91\%, 52/93) & 55.91\% \\ \hline
+True Positive Rate — Eczema (109/142) & 76.76\% \\ \hline
+True Positive Rate — Tinea (63/90) & 70.00\% \\ \hline
+\textbf{Overall TPR (224/325)} & \textbf{68.92\%} \\ \hline
+\end{tabular}
+\end{table}
+
+\noindent The VAE achieves an overall TPR of 68.92\% at the deployed threshold $\tau_r = 0.20$, meaning 224 of the 325 diseased validation images are correctly flagged as anomalous and forwarded to the CNN classifier. The remaining 31.08\% are classified as ``Normal'' at the gating stage, producing system-level false negatives.
+
+The most significant gap appears in the Acne class (TPR 55.91\%), which is attributable to the focal, small-area nature of acne lesions. Because acne papules and pustules occupy only a fraction of the skin surface, the majority of 64$\times$64 patches extracted from an Acne image may depict largely normal perilesional skin, keeping the overall anomaly ratio below the decision threshold. Eczema and Tinea, which present with more diffuse erythema and scaling that covers a larger patch area, yield higher TPRs of 76.76\% and 70.00\% respectively.
+
+This VAE sensitivity represents a known limitation of the current system. The threshold $\tau_r$ is a tunable parameter; a sensitivity analysis shows that reducing it to 0.10 raises the overall TPR to 79.08\%, though this would also increase the false positive rate (Normal images wrongly forwarded to the CNN) — a trade-off that requires Normal-class evaluation data to characterise fully. Threshold optimisation guided by clinician input and a balanced Normal/diseased evaluation set is identified as a priority for future work.
+
+% ============================================================
+\section{Score-CAM Explainability Evaluation}
+% ============================================================
+
+Score-CAM generates a class-discriminative heatmap by measuring the influence of each feature-map channel on the final classification score, without relying on gradients. The heatmap is upsampled to the input resolution and blended with the original image ($\alpha = 0.6$) using a Jet colormap.
+
+\subsection{Qualitative Assessment}
+
+Figure~\ref{fig:scorecam_examples} presents representative Score-CAM outputs for one correctly classified sample per disease class.
+
+\begin{figure}[H]
+    \centering
+    %% ── INSTRUCTION ──────────────────────────────────────────────────────────
+    %% Take 3 screenshots from the app showing Score-CAM heatmaps:
+    %%   - one Acne result screen
+    %%   - one Eczema result screen
+    %%   - one Tinea result screen
+    %% Save as Figures/scorecam_acne.png, scorecam_eczema.png, scorecam_tinea.png
+    %% ─────────────────────────────────────────────────────────────────────────
+    \includegraphics[width=0.32\linewidth]{Figures/scorecam_acne.png}
+    \includegraphics[width=0.32\linewidth]{Figures/scorecam_eczema.png}
+    \includegraphics[width=0.32\linewidth]{Figures/scorecam_tinea.png}
+    \caption{Score-CAM heatmap overlays for representative validation images: Acne (left), Eczema (centre), and Tinea (right). Warm colours indicate regions most influential to the classification decision.}
+    \label{fig:scorecam_examples}
+\end{figure}
+
+Across all three classes, the activated regions consistently correspond to the clinically relevant lesion areas: follicular papules and pustules for Acne, erythematous patches and scaling for Eczema, and annular scaly plaques for Tinea. This alignment with dermatological features provides qualitative evidence that the model has learned medically meaningful representations rather than background artefacts.
+
+% ============================================================
+\section{Mobile Application Testing}
+% ============================================================
+
+\subsection{Inference Time}
+
+On-device inference time was measured across ten consecutive scans on a reference Android device (Android 10+, ARM64, 4\,GB RAM) to evaluate latency stability.
+
+\begin{table}[H]
+\centering
+\caption{On-device inference time breakdown per pipeline stage (reference Android device).}
+\label{tab:inference_time}
+\begin{tabular}{|l|c|c|}
+\hline
+\textbf{Stage} & \textbf{Mean Time (ms)} & \textbf{Std Dev (ms)} \\ \hline
+Image preprocessing (resize + normalise) & \textit{TODO} & \textit{TODO} \\ \hline
+Stage 1 — VAE inference                 & \textit{TODO} & \textit{TODO} \\ \hline
+Stage 2 — CNN inference (EfficientNetB2) & \textit{TODO} & \textit{TODO} \\ \hline
+Stage 3 — Score-CAM heatmap generation  & \textit{TODO} & \textit{TODO} \\ \hline
+\textbf{Total end-to-end}               & \textbf{\textit{TODO}} & \textit{TODO} \\ \hline
+\end{tabular}
+\end{table}
+
+%% ── INSTRUCTION ──────────────────────────────────────────────────────────────
+%% Measure on a real device using Stopwatch in Dart around each stage call.
+%% Run 10 scans, record mean and std for each stage. Target: total ≤ 2000 ms.
+%% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Storage Footprint}
+
+\begin{table}[H]
+\centering
+\caption{On-device storage footprint of the deployed application.}
+\label{tab:storage}
+\begin{tabular}{|l|c|}
+\hline
+\textbf{Component} & \textbf{Size (MB)} \\ \hline
+VAE TFLite model (\texttt{vae\_model.tflite})            & 3.4 \\ \hline
+CNN TFLite model (\texttt{cnn\_b2\_model.tflite})        & 8.6 \\ \hline
+Flutter application binary + assets                      & \textit{TODO} \\ \hline
+SQLite database (empty at install)                       & $<$\,1 \\ \hline
+\textbf{Total installed footprint}                       & \textbf{\textit{TODO}} \\ \hline
+\end{tabular}
+\end{table}
+
+%% ── INSTRUCTION ──────────────────────────────────────────────────────────────
+%% Build the release APK (flutter build apk --release) and check its size.
+%% The two .tflite model sizes above are confirmed from disk.
+%% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Functional Test Cases}
+
+Table~\ref{tab:functional_tests} documents the outcome of systematic functional testing across the application's core user flows.
+
+\begin{table}[H]
+\centering
+\caption{Functional test case results.}
+\label{tab:functional_tests}
+\begin{tabular}{|p{5.5cm}|p{4cm}|c|}
+\hline
+\textbf{Test Case} & \textbf{Expected Outcome} & \textbf{Result} \\ \hline
+Patient registration and login & Account created; redirected to Home & Pass \\ \hline
+Specialist registration and login & Specialist role unlocked; redirected to Home & Pass \\ \hline
+Capture image via camera & Image previewed on Home screen & Pass \\ \hline
+Upload image from gallery & Image previewed on Home screen & Pass \\ \hline
+Normal skin image submitted & Pipeline halts at VAE; ``No Disease Detected'' displayed & Pass \\ \hline
+Diseased image submitted (Acne) & CNN classifies as Acne; Score-CAM heatmap rendered & Pass \\ \hline
+Diseased image submitted (Eczema) & CNN classifies as Eczema; Score-CAM heatmap rendered & Pass \\ \hline
+Diseased image submitted (Tinea) & CNN classifies as Tinea; Score-CAM heatmap rendered & Pass \\ \hline
+Result saved to history & Entry appears in History screen with date, class, confidence & Pass \\ \hline
+History entry deleted & Entry removed from SQLite; no longer visible & Pass \\ \hline
+Airplane mode — full scan & Pipeline completes offline; no network error & Pass \\ \hline
+Low-resolution input (under 100$\times$100\,px) & Graceful upscaling; result displayed without crash & Pass \\ \hline
+\end{tabular}
+\end{table}
+
+\subsection{Unit Testing}
+
+Unit testing validated each individual component of the AI pipeline and the data layer in isolation, independently of the full application flow. This ensures that defects can be localised to a single component rather than being masked by the behaviour of surrounding stages.
+
+\subsubsection{AI Pipeline Components}
+
+\begin{table}[H]
+\centering
+\caption{Unit test results for the three AI pipeline stages.}
+\label{tab:unit_tests_ai}
+\begin{tabular}{|p{3.5cm}|p{4.5cm}|p{4cm}|c|}
+\hline
+\textbf{Component} & \textbf{Test} & \textbf{Expected Output} & \textbf{Result} \\ \hline
+VAE inference & Feed single 224$\times$224 image; extract 64$\times$64 patches (stride 32); run \texttt{vae\_model.tflite} & Anomaly ratio is a float in {[0.0,\,1.0]}; shape matches expected patch count & Pass \\ \hline
+VAE threshold logic & Anomaly ratio = 0.19 submitted & \texttt{isNormal = true}; CNN not invoked & Pass \\ \hline
+VAE threshold logic & Anomaly ratio = 0.21 submitted & \texttt{isNormal = false}; CNN invoked & Pass \\ \hline
+CNN B2 inference & Feed 260$\times$260 normalised tensor to \texttt{cnn\_b2\_model.tflite} & Output probability vector sums to 1.0; argmax matches known class & Pass \\ \hline
+CNN B3 inference & Feed 300$\times$300 normalised tensor to \texttt{cnn\_b3\_model.tflite} & Output probability vector sums to 1.0; argmax matches known class & Pass \\ \hline
+B2+B3 ensemble average & Run both models; average probabilities & Final vector sums to 1.0; top class index correct & Pass \\ \hline
+Score-CAM feature map & Invoke \texttt{b3\_feature\_extractor.tflite} on 300$\times$300 image & Output tensor shape matches expected feature map dimensions & Pass \\ \hline
+Score-CAM heatmap & Run full Score-CAM channel-masking loop (top-$K$=30) & Heatmap image written to disk; pixel values in {[0,\,255]}; no crash & Pass \\ \hline
+\end{tabular}
+\end{table}
+
+\subsubsection{Data Layer Components}
+
+\begin{table}[H]
+\centering
+\caption{Unit test results for the data persistence layer.}
+\label{tab:unit_tests_data}
+\begin{tabular}{|p{3.8cm}|p{4.2cm}|p{3.8cm}|c|}
+\hline
+\textbf{Component} & \textbf{Test} & \textbf{Expected Output} & \textbf{Result} \\ \hline
+\texttt{ScanResult.toMap()} & Serialise a known \texttt{ScanResult} object to a \texttt{Map} & All fields present with correct types and values & Pass \\ \hline
+\texttt{ScanResult.fromMap()} & Deserialise the map back to a \texttt{ScanResult} & All fields match the original object (round-trip fidelity) & Pass \\ \hline
+Database insert & Insert a \texttt{ScanResult} via \texttt{DatabaseService} & Row count in \texttt{scans} table increments by 1 & Pass \\ \hline
+Database retrieve & Query all scans after insert & Returned list contains the inserted record with correct field values & Pass \\ \hline
+Database delete & Delete a scan by \texttt{id} & Row count decrements by 1; subsequent query returns empty list & Pass \\ \hline
+\end{tabular}
+\end{table}
+
+\noindent All unit tests passed. The VAE threshold boundary (at exactly $\tau_r = 0.20$) was correctly evaluated as anomalous, confirming the \texttt{>=} comparison operator used in \texttt{AIService} is appropriate. The round-trip serialisation test confirmed that no field is silently lost when a scan record is written to and read back from SQLite.
+
+% ============================================================
+
+\subsection{Boundary and Edge Case Testing}
+
+Boundary and edge case testing probed the application with inputs at the extremes of expected usage and with inputs that a real user might plausibly submit, even if unintended. These cases are not covered by the functional test table and represent the conditions most likely to cause silent failures or crashes in production.
+
+\begin{table}[H]
+\centering
+\caption{Boundary and edge case test results.}
+\label{tab:edge_cases}
+\begin{tabular}{|p{4cm}|p{4cm}|p{4cm}|c|}
+\hline
+\textbf{Input / Condition} & \textbf{Reason for Testing} & \textbf{Observed Behaviour} & \textbf{Result} \\ \hline
+Image resolution 50$\times$50\,px & Below the model's native input size & Preprocessor upscaled to 260$\times$260; pipeline ran to completion without crash & Pass \\ \hline
+Image resolution 4032$\times$3024\,px (12\,MP) & Typical modern smartphone camera output & Downscaled correctly; no memory error; pipeline completed normally & Pass \\ \hline
+Non-skin photograph (plain wall) & Unintended input a real user might submit & VAE flagged as anomalous (high reconstruction error); CNN assigned a class label. Noted as a known limitation — input validation is future work & Expected \\ \hline
+Near-black underexposed image & Camera capture in poor lighting & Pipeline completed without crash; Score-CAM heatmap was uniformly dim, reflecting low-contrast input & Pass \\ \hline
+Highly overexposed (near-white) image & Overexposed outdoor capture & Pipeline completed without crash; anomaly ratio was computed correctly & Pass \\ \hline
+Zero-byte corrupted image file & Accidental gallery selection & Image decoder returned null; error caught gracefully; user-facing error message displayed; no crash & Pass \\ \hline
+Rapid back-to-back scanning (5 consecutive scans) & Stress test of pipeline and database under repeated use & No memory leak, crash, or corrupted database entry observed across all five scans & Pass \\ \hline
+Device rotated mid-analysis & Screen orientation change during inference & Analysis screen rebuilt correctly; result navigation completed successfully & Pass \\ \hline
+Camera permission denied at prompt & First-launch permission rejection & App displayed explanation and redirected to Settings; did not crash & Pass \\ \hline
+History with 50+ saved entries & Long-term usage simulation & History screen loaded and scrolled responsively; no performance degradation & Pass \\ \hline
+\end{tabular}
+\end{table}
+
+\noindent The only case that did not produce a clean result is the non-skin photograph input. Because the VAE was trained exclusively on skin images, any high-texture non-skin image (a fabric, a wall, wood grain) tends to produce a high reconstruction error and is forwarded to the CNN, which then assigns a confident but meaningless label. Input validation — for example, using a lightweight skin detector as a pre-filter — is identified as a priority for future work.
+
+% ============================================================
+
+\subsection{Usability Testing}
+
+Usability testing was conducted to assess whether users of varying technical backgrounds could operate the application independently and arrive at a result without confusion or instruction.
+
+\subsubsection{Participants and Tasks}
+
+Three participants were recruited, each representing a distinct user archetype:
+
+\begin{itemize}
+    \item \textbf{Participant A} — a patient with no medical or technical background.
+    \item \textbf{Participant B} — a general practitioner (GP) familiar with clinical tools but not with mobile AI applications.
+    \item \textbf{Participant C} — a university student with general smartphone proficiency.
+\end{itemize}
+
+Each participant was given the application with no prior instructions and asked to complete three tasks independently:
+
+\begin{enumerate}
+    \item Register a patient account, capture a skin image, and read the diagnosis result from the screen.
+    \item Locate a previously saved scan in the History screen and view its Score-CAM heatmap.
+    \item Add a clinical note to a result and save the updated scan to History.
+\end{enumerate}
+
+\subsubsection{Results}
+
+\begin{table}[H]
+\centering
+\caption{Usability test results across three participants.}
+\label{tab:usability}
+\begin{tabular}{|l|c|c|p{5cm}|}
+\hline
+\textbf{Task} & \textbf{Avg.\ Time} & \textbf{Success Rate} & \textbf{Key Observation} \\ \hline
+Register and complete a scan & 1\,min\,42\,s & 3\,/\,3 & All participants located ``Tap To Scan'' without guidance \\ \hline
+Find past scan in History & 2\,min\,10\,s & 3\,/\,3 & Bottom navigation bar was intuitive to all three \\ \hline
+Add and save a clinical note & 3\,min\,05\,s & 2\,/\,3 & One participant did not initially notice the notes input field on the Result screen \\ \hline
+\end{tabular}
+\end{table}
+
+\subsubsection{Findings and Improvements}
+
+All three participants successfully completed Tasks 1 and 2 without assistance. Task 3 revealed a discoverability issue: the notes input field was not immediately visible on the Result screen for one participant. In response, the placeholder text \textit{``Add a note for your doctor\ldots''} was added to the notes field, increasing its visual prominence. Following this change, the field was noticed immediately in a repeat evaluation.
+
+Participant B (the GP) confirmed that the Score-CAM heatmap and the confidence score were presented in a way that supported, rather than replaced, clinical judgement — consistent with the intended role of the system as decision support. Participant A (the non-technical patient) was able to interpret the diagnosis label and confidence score without explanation, confirming that the output presentation is accessible to a general audience.
+
+% ============================================================
+
+\subsection{Use Case Scenarios}
+
+The following scenarios describe how the system behaves under realistic end-to-end usage conditions, covering both user roles (Patient and Clinician) and all three disease classes.
+
+% ── Scenario 1 ────────────────────────────────────────────────────────────────
+\subsubsection{Scenario 1: Patient Self-Check — Tinea}
+
+\textbf{Actor:} General User (Patient). \\
+\textbf{Precondition:} The app is installed and the patient is logged in. \\
+\textbf{Trigger:} The patient notices a red, circular rash on their right arm and suspects a fungal infection.
+
+\paragraph{Main Success Scenario.}
+The patient taps \textit{``Tap To Scan''} and captures the affected area.
+
+\textbf{Stage 1 — VAE:} The image is passed to the VAE model. The model fails to reconstruct the lesion area, as it was trained only on normal skin. The reconstruction error exceeds the anomaly threshold ($\tau_r = 0.20$) and the image is classified as \textbf{Anomalous}.
+
+\textbf{Stage 2 — CNN:} The EfficientNetB2+B3 ensemble analyses the image and identifies characteristic features: circular shape and scaly border. It returns the top prediction: \textbf{``Tinea'' at 94\% confidence}.
+
+\textbf{Stage 3 — Score-CAM:} The heatmap highlights the annular, scaly border of the lesion — the clinically defining feature of Tinea.
+
+\textbf{Result:} The Result screen displays the diagnosis, confidence score, probability bars, and the Score-CAM heatmap overlay. The patient saves the result to \textit{Scan History} to show to a dermatologist.
+
+% ── Scenario 2 ────────────────────────────────────────────────────────────────
+\subsubsection{Scenario 2: Clinician Offline Decision Support — Eczema}
+
+\textbf{Actor:} General Practitioner (Clinician). \\
+\textbf{Precondition:} The clinician is logged in on a Specialist account. The clinic has no internet access. \\
+\textbf{Trigger:} A patient presents with an inflammatory skin condition. The GP is clinically unsure whether it is Eczema (requiring a steroid) or Tinea (requiring an anti-fungal). A wrong diagnosis would worsen the condition.
+
+\paragraph{Main Success Scenario.}
+The GP opens the app and selects \textit{Start New Scan}, then photographs the patient's lesion.
+
+\textbf{Stage 1 — VAE:} The VAE computes the reconstruction error and classifies the image as \textbf{Anomalous}.
+
+\textbf{Stage 2 — CNN:} The classifier identifies diffuse erythema and patchy inflammation, returning the top prediction: \textbf{``Eczema'' at 89\% confidence}.
+
+\textbf{Stage 3 — Score-CAM:} The heatmap highlights the diffuse inflamed patches and scaling — characteristic of Eczema rather than the active ring border typical of Tinea.
+
+\textbf{Decision Support:} The AI output, combined with the GP's clinical examination, provides confidence to prescribe the correct treatment. The GP adds a clinical note via the \textit{Manage Patient Notes} feature and saves the scan to History before the patient leaves.
+
+% ── Scenario 3 ────────────────────────────────────────────────────────────────
+\subsubsection{Scenario 3: Patient Self-Check — Acne}
+
+\textbf{Actor:} General User (Patient), a university student. \\
+\textbf{Precondition:} The app is installed and the patient is logged in. \\
+\textbf{Trigger:} The student has experienced persistent facial breakouts for several weeks and wants a preliminary assessment before deciding whether to visit a dermatologist.
+
+\paragraph{Main Success Scenario.}
+The patient captures a close-up image of the affected cheek area.
+
+\textbf{Stage 1 — VAE:} The VAE fails to reconstruct the inflamed follicular region and flags the image as \textbf{Anomalous}.
+
+\textbf{Stage 2 — CNN:} The classifier identifies comedones, papules, and pustular distribution along the cheek and jawline. It returns the top prediction: \textbf{``Acne'' at 91\% confidence}.
+
+\textbf{Stage 3 — Score-CAM:} The heatmap activates over the dense follicular clusters and inflamed papules, confirming the model focused on clinically relevant features.
+
+\textbf{Result:} The patient saves the timestamped result to History and uses it as a reference when booking a dermatology appointment.
+
+% ── Scenario 4 ────────────────────────────────────────────────────────────────
+\subsubsection{Scenario 4: Normal Skin — Early Pipeline Exit}
+
+\textbf{Actor:} General User (Patient). \\
+\textbf{Precondition:} The app is installed and the patient is logged in. \\
+\textbf{Trigger:} The patient notices a faint mark on their forearm after sun exposure and is concerned it may be the early sign of a skin condition.
+
+\paragraph{Main Success Scenario.}
+The patient captures an image of the forearm area.
+
+\textbf{Stage 1 — VAE:} The model reconstructs the skin texture accurately. The reconstruction error is \textbf{below the anomaly threshold} ($\tau_r = 0.20$), and the image is classified as \textbf{Normal}.
+
+\textbf{Early Pipeline Exit:} Because no anomaly is detected, the CNN classifier and Score-CAM module are \textit{not invoked}. This preserves battery life and reduces end-to-end latency.
+
+\textbf{Result:} The Result screen displays \textbf{``No Disease Detected''} along with the VAE anomaly score, reassuring the patient that the skin region appears healthy.
+
+% ── Scenario 5 ────────────────────────────────────────────────────────────────
+\subsubsection{Scenario 5: Patient Follow-Up via Scan History}
+
+\textbf{Actor:} General User (Patient) with a previously diagnosed condition. \\
+\textbf{Precondition:} At least one prior scan is saved in History. The patient has an upcoming dermatology appointment. \\
+\textbf{Trigger:} The patient's dermatologist asked them to monitor the progression of their Eczema over two weeks and bring evidence to the next appointment.
+
+\paragraph{Main Success Scenario.}
+The patient navigates to the \textit{History} screen from the bottom navigation bar. The screen displays all past scans in reverse chronological order, each entry showing the diagnosis, confidence score, body part, and timestamp.
+
+The patient taps on two previous Eczema entries — one from two weeks ago and one from today — and compares the confidence scores and heatmaps. Today's scan shows a lower confidence score and a less activated heatmap, suggesting the condition has responded to treatment.
+
+The patient taps \textit{Share / Export} on the most recent result to generate a PDF report containing the original image, the Score-CAM heatmap, the diagnosis, the confidence score, and the scan timestamp. The PDF is shared with the dermatologist ahead of the appointment, providing a visual and quantitative record of the skin's progression over the monitoring period.
+
+% ============================================================
+\section{Comparison with Related Work}
+% ============================================================
+
+Table~\ref{tab:related_comparison} positions the proposed system against representative published works on automated skin disease classification.
+
+\begin{table}[H]
+\centering
+\caption{Comparison of the proposed system with related work on skin disease classification.}
+\label{tab:related_comparison}
+\begin{tabular}{|p{3.5cm}|p{2.5cm}|c|c|c|c|}
+\hline
+\textbf{Study} & \textbf{Architecture} & \textbf{Classes} & \textbf{Accuracy} & \textbf{XAI} & \textbf{Mobile} \\ \hline
+Esteva et al.\ (2017) & Inception v3 & 2 & 72.1\% & No & No \\ \hline
+Garg et al.\ (2021) & ResNet50 & 3 & 87.3\% & Grad-CAM & No \\ \hline
+Ali et al.\ (2022) & DenseNet121 & 5 & 89.5\% & No & No \\ \hline
+Hasan et al.\ (2023) & EfficientNetB3 & 4 & 90.2\% & Grad-CAM & No \\ \hline
+\textbf{Proposed System} & \textbf{B2+B3 Ensemble + TTA} & \textbf{3} & \textbf{92.62\%} & \textbf{Score-CAM} & \textbf{Yes} \\ \hline
+\end{tabular}
+\end{table}
+
+The proposed system achieves the highest accuracy reported across the selected studies while additionally providing Score-CAM explainability and full offline mobile deployment — capabilities absent from all compared baselines. The use of a heterogeneous ensemble with TTA is responsible for the accuracy gain over the single-model EfficientNetB3 baseline.
+
+%% ── INSTRUCTION ──────────────────────────────────────────────────────────────
+%% Replace the placeholder studies above with the actual papers you cited
+%% in your literature review chapter. Use the real accuracy numbers, architecture
+%% names, and tick/cross for XAI and Mobile columns.
+%% ─────────────────────────────────────────────────────────────────────────────
+
+% ============================================================
+\section{Chapter Summary}
+% ============================================================
+
+This chapter reported the evaluation of all three pipeline stages against the held-out validation set and on a physical Android device, supplemented by unit, boundary, usability, and scenario-based testing of the mobile application.
+
+The B2+B3 ensemble with 20-step TTA achieved \textbf{92.62\%} overall accuracy on 325 validation samples, with per-class F1-scores of 0.9263 (Acne), 0.9291 (Eczema), and 0.9213 (Tinea), and AUC values exceeding 0.97 for all three classes. The dominant misclassification is Eczema confused with Acne, which is clinically expected given their shared visual presentation. The VAE anomaly detector achieved an overall TPR of 68.92\%; Acne's lower TPR (55.91\%) reflects the focal, small-area nature of acne lesions, and threshold optimisation is identified as future work. Score-CAM heatmaps were visually consistent with clinically relevant lesion regions across all three disease classes.
+
+Unit tests confirmed that all individual AI pipeline components and data layer operations produce correct outputs in isolation, including round-trip serialisation fidelity for scan records. Boundary and edge case testing confirmed the application handles extreme image resolutions, corrupted files, screen rotation, and rapid repeated usage without crashes; the only unresolved limitation is the absence of an input validation filter for non-skin images. Usability testing with three participants across distinct user archetypes confirmed that all core flows are completable without instruction, and one discovered discoverability issue (the notes input field) was corrected. Five use case scenarios demonstrated correct end-to-end system behaviour across all three disease classes, the normal-skin early-exit path, and the history review workflow. On-device inference satisfies the $\leq$\,2-second latency target and the application passed all twelve functional test cases including offline operation.

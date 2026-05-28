@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
+import 'demo_users.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -14,6 +15,7 @@ class DatabaseService {
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDatabase();
+    await _seedDemoUsers();
     return _database!;
   }
 
@@ -23,7 +25,7 @@ class DatabaseService {
 
     return openDatabase(
       path,
-      version: 3,
+      version: 5,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -40,7 +42,15 @@ class DatabaseService {
         class_probabilities TEXT NOT NULL,
         timestamp INTEGER NOT NULL,
         notes TEXT,
-        heatmap_path TEXT
+        heatmap_path TEXT,
+        vae_heatmap_path TEXT,
+        anomaly_ratio REAL,
+        preprocess_ms INTEGER,
+        vae_ms INTEGER,
+        cnn_ms INTEGER,
+        score_cam_ms INTEGER,
+        class_heatmap_paths TEXT,
+        xai_rationale TEXT
       )
     ''');
 
@@ -57,6 +67,11 @@ class DatabaseService {
         created_at INTEGER NOT NULL
       )
     ''');
+
+    // Seed demo users
+    for (final user in DemoUsers.getAllDemoUsers()) {
+      await db.insert('users', user);
+    }
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -65,6 +80,45 @@ class DatabaseService {
         await db.execute('ALTER TABLE scans ADD COLUMN heatmap_path TEXT');
       } catch (_) {
         // Column may already exist
+      }
+    }
+    if (oldVersion < 4) {
+      for (final col in const [
+        'vae_heatmap_path TEXT',
+        'anomaly_ratio REAL',
+        'preprocess_ms INTEGER',
+        'vae_ms INTEGER',
+        'cnn_ms INTEGER',
+        'score_cam_ms INTEGER',
+      ]) {
+        try {
+          await db.execute('ALTER TABLE scans ADD COLUMN $col');
+        } catch (_) {
+          // Column may already exist
+        }
+      }
+    }
+    if (oldVersion < 5) {
+      for (final col in const [
+        'class_heatmap_paths TEXT',
+        'xai_rationale TEXT',
+      ]) {
+        try {
+          await db.execute('ALTER TABLE scans ADD COLUMN $col');
+        } catch (_) {
+          // Column may already exist
+        }
+      }
+    }
+  }
+
+  Future<void> _seedDemoUsers() async {
+    final db = await database;
+    for (final user in DemoUsers.getAllDemoUsers()) {
+      try {
+        await db.insert('users', user, conflictAlgorithm: ConflictAlgorithm.ignore);
+      } catch (_) {
+        // User already exists
       }
     }
   }

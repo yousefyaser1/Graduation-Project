@@ -12,6 +12,7 @@ import 'package:printing/printing.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/routing/app_router.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
+import '../../../core/widgets/xai_attention_legend.dart';
 import '../../../models/scan_result.dart';
 import '../../../providers/scan_provider.dart';
 import '../../../providers/user_provider.dart';
@@ -32,6 +33,7 @@ class _AnalysisResultsScreenState
   bool _saved = false;
   bool _saving = false;
   bool _exportingPdf = false;
+  bool _showPipelineDetails = true;
 
   // When top-class confidence is below this, show the "Other" slot
   static const double _otherThreshold = 0.60;
@@ -42,6 +44,9 @@ class _AnalysisResultsScreenState
   bool _showScoreCam = false;
   bool _showVerdict = false;
   bool _showExtras = false;
+
+  // Which class's Score-CAM heatmap the specialist is viewing (null = predicted)
+  String? _selectedHeatmapClass;
 
   // ── Disease information database ─────────────────────────────────────────────
   static const _diseaseData = <String, Map<String, Object>>{
@@ -411,7 +416,7 @@ class _AnalysisResultsScreenState
                     color: PdfColors.grey700)),
             pw.SizedBox(height: 4),
             pw.Text(
-                'Anomaly ratio: ${(scan.anomalyRatio! * 100).toStringAsFixed(1)}%  (threshold: 20%)',
+                'Anomaly ratio: ${(scan.anomalyRatio! * 100).toStringAsFixed(1)}%  (threshold: 15%)',
                 style: pw.TextStyle(
                     fontSize: 10, color: PdfColors.grey600)),
             pw.Text(
@@ -435,7 +440,7 @@ class _AnalysisResultsScreenState
                     color: PdfColors.grey700)),
             pw.SizedBox(height: 4),
             pw.Text(
-                'VAE: ${scan.vaeMs}ms  |  CNN: ${scan.cnnMs ?? 0}ms  |  Score-CAM: ${scan.scoreCamMs ?? 0}ms  |  Total: ${(scan.vaeMs ?? 0) + (scan.cnnMs ?? 0) + (scan.scoreCamMs ?? 0)}ms',
+                'Preprocess: ${scan.preprocessMs ?? 0}ms  |  VAE: ${scan.vaeMs}ms  |  CNN: ${scan.cnnMs ?? 0}ms  |  Score-CAM: ${scan.scoreCamMs ?? 0}ms  |  Total: ${(scan.preprocessMs ?? 0) + (scan.vaeMs ?? 0) + (scan.cnnMs ?? 0) + (scan.scoreCamMs ?? 0)}ms',
                 style: pw.TextStyle(
                     fontSize: 10, color: PdfColors.grey600)),
             pw.SizedBox(height: 12),
@@ -618,7 +623,7 @@ class _AnalysisResultsScreenState
                   color: AppColors.textSecondary)),
           const SizedBox(height: 8),
           const Text(
-            'The VAE anomaly detector found reconstruction error below the 20% threshold — no patterns consistent with Acne, Eczema, or Tinea were present.',
+            'The VAE anomaly detector found reconstruction error below the 15% threshold — no patterns consistent with Acne, Eczema, or Tinea were present.',
             style: TextStyle(
                 fontSize: 12, color: AppColors.textPrimary, height: 1.55),
           ),
@@ -808,10 +813,11 @@ class _AnalysisResultsScreenState
 
   Widget _buildTimingCard(ScanResult scan) {
     if (scan.vaeMs == null) return const SizedBox.shrink();
+    final pre = scan.preprocessMs ?? 0;
     final vae = scan.vaeMs!;
     final cnn = scan.cnnMs ?? 0;
     final cam = scan.scoreCamMs ?? 0;
-    final total = vae + cnn + cam;
+    final total = pre + vae + cnn + cam;
     return _stageCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         _stageLabel(Icons.timer_outlined, 'ON-DEVICE INFERENCE TIMING'),
@@ -819,6 +825,7 @@ class _AnalysisResultsScreenState
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
+            _TimingChip(label: 'Preprocess', ms: pre),
             _TimingChip(label: 'VAE', ms: vae),
             _TimingChip(label: 'CNN', ms: cnn),
             _TimingChip(label: 'Score-CAM', ms: cam),
@@ -938,30 +945,9 @@ class _AnalysisResultsScreenState
             ),
           ),
           const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text('High MSE (anomalous)',
-                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-              Text('Low MSE (normal)',
-                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Container(
-            height: 7,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(4),
-              gradient: const LinearGradient(
-                colors: [
-                  Color(0xFFEF4444),
-                  Color(0xFFF97316),
-                  Color(0xFFFACC15),
-                  Color(0xFF86EFAC),
-                  Color(0xFF22C55E),
-                ],
-              ),
-            ),
+          const AttentionLegendBar(
+            highLabel: 'High MSE (anomalous)',
+            lowLabel: 'Low MSE (normal)',
           ),
           const SizedBox(height: 12),
         ],
@@ -1006,7 +992,7 @@ class _AnalysisResultsScreenState
           const SizedBox(height: 4),
           Text(
             isAnomaly
-                ? 'Ratio exceeded the 20% threshold — passed to CNN.'
+                ? 'Ratio exceeded the 15% threshold — passed to CNN.'
                 : 'Ratio below threshold — classified as normal skin.',
             style: const TextStyle(
                 fontSize: 11, color: AppColors.textSecondary),
@@ -1155,62 +1141,284 @@ class _AnalysisResultsScreenState
   // ── Stage 3: Score-CAM ────────────────────────────────────────────────────
 
   Widget _buildScoreCamSection(ScanResult scan) {
-    final hasHeatmap =
-        scan.heatmapPath != null && File(scan.heatmapPath!).existsSync();
+    // Classes that actually have a per-class heatmap, ordered by probability.
+    final available = scan.classHeatmapPaths.entries
+        .where((e) => File(e.value).existsSync())
+        .map((e) => e.key)
+        .toList()
+      ..sort((a, b) => (scan.classProbabilities[b] ?? 0)
+          .compareTo(scan.classProbabilities[a] ?? 0));
+
+    final selected = (_selectedHeatmapClass != null &&
+            available.contains(_selectedHeatmapClass))
+        ? _selectedHeatmapClass!
+        : (available.contains(scan.diagnosis)
+            ? scan.diagnosis
+            : (available.isNotEmpty ? available.first : null));
+
+    final displayPath = selected != null
+        ? scan.classHeatmapPaths[selected]
+        : scan.heatmapPath;
+    final hasHeatmap = displayPath != null && File(displayPath).existsSync();
 
     return _stageCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _stageLabel(
-            Icons.thermostat_outlined, 'STAGE 3 · EXPLAINABILITY MAP  (SCORE-CAM)'),
+        _stageLabel(Icons.thermostat_outlined,
+            'STAGE 3 · EXPLAINABILITY MAP  (SCORE-CAM)'),
         const SizedBox(height: 12),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: hasHeatmap
-              ? Image.file(File(scan.heatmapPath!),
-                  width: double.infinity, height: 190, fit: BoxFit.cover)
-              : CustomPaint(
-                  painter: _HeatmapPainter(),
-                  child: const SizedBox(width: double.infinity, height: 190),
+
+        // Per-class selector — compare why the model favoured each class.
+        if (available.length > 1) ...[
+          Wrap(
+            spacing: 8,
+            children: available.map((cls) {
+              final isSel = cls == selected;
+              final pct = ((scan.classProbabilities[cls] ?? 0) * 100).round();
+              return GestureDetector(
+                onTap: () => setState(() => _selectedHeatmapClass = cls),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color:
+                        isSel ? AppColors.primary : AppColors.primaryLight,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                        color: isSel ? AppColors.primary : AppColors.border),
+                  ),
+                  child: Text('$cls · $pct%',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isSel ? Colors.white : AppColors.primary,
+                      )),
                 ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            selected == scan.diagnosis
+                ? 'Showing the predicted class. Tap another to see its counterfactual map.'
+                : 'Counterfactual: where the model would look to support $selected.',
+            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 10),
+        ],
+
+        GestureDetector(
+          onTap: hasHeatmap
+              ? () => context.push(AppRoutes.xaiHeatmap, extra: scan)
+              : null,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: hasHeatmap
+                ? Image.file(File(displayPath),
+                    key: ValueKey(displayPath),
+                    width: double.infinity,
+                    height: 190,
+                    fit: BoxFit.cover)
+                : CustomPaint(
+                    painter: _HeatmapPainter(),
+                    child: const SizedBox(width: double.infinity, height: 190),
+                  ),
+          ),
         ),
         const SizedBox(height: 8),
         Text(
           hasHeatmap
-              ? 'Highlighted regions drove the prediction.'
+              ? (selected == scan.diagnosis
+                  ? 'Highlighted regions drove the $selected prediction.'
+                  : 'Regions that would support $selected.')
               : scan.diagnosis == 'No Disease Detected'
                   ? 'No anomaly detected — heatmap not generated.'
                   : 'Score-CAM heatmap unavailable.',
-          style:
-              const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
         ),
         const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: const [
-            Text('High attention',
-                style: TextStyle(
-                    fontSize: 11, color: AppColors.textSecondary)),
-            Text('Low attention',
-                style: TextStyle(
-                    fontSize: 11, color: AppColors.textSecondary)),
-          ],
+        const AttentionLegendBar(),
+        if (scan.xaiRationale != null) ...[
+          const SizedBox(height: 10),
+          Text(scan.xaiRationale!,
+              style: const TextStyle(
+                  fontSize: 12, color: AppColors.textPrimary, height: 1.5)),
+        ],
+      ]),
+    );
+  }
+
+  // ── Shared XAI helpers (uncertainty + limitations) ───────────────────────
+
+  /// Explains the gap between the top-two classes and warns when the result
+  /// is poorly separated.
+  Widget? _buildUncertaintyNote(ScanResult scan) {
+    if (scan.classProbabilities.length < 2) return null;
+    final sorted = scan.classProbabilities.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final top = sorted[0], second = sorted[1];
+    final margin = top.value - second.value;
+    final (label, color) = margin >= 0.40
+        ? ('Well separated', AppColors.success)
+        : margin >= 0.20
+            ? ('Moderate separation', const Color(0xFFF59E0B))
+            : ('Low separation', AppColors.error);
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.balance_outlined, size: 14, color: color),
+          const SizedBox(width: 6),
+          Text('CONFIDENCE MARGIN · ${label.toUpperCase()}',
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                  letterSpacing: 0.5)),
+        ]),
+        const SizedBox(height: 8),
+        Text(
+          '${top.key} (${(top.value * 100).round()}%) vs ${second.key} '
+          '(${(second.value * 100).round()}%) — a ${(margin * 100).round()}-point gap.'
+          '${margin < 0.20 ? ' The top two are close, so treat this result with extra caution and seek a clinician\'s opinion.' : ''}',
+          style: const TextStyle(
+              fontSize: 12, color: AppColors.textPrimary, height: 1.5),
         ),
-        const SizedBox(height: 4),
-        Container(
-          height: 7,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(4),
-            gradient: const LinearGradient(
-              colors: [
-                Color(0xFFEF4444),
-                Color(0xFFF97316),
-                Color(0xFFFACC15),
-                Color(0xFF86EFAC),
-                Color(0xFF22C55E),
-              ],
-            ),
+      ]),
+    );
+  }
+
+  /// Honest disclosure of when the heatmap / result can mislead.
+  Widget _buildLimitationsNote(ScanResult scan) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFCD34D)),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Icon(Icons.info_outline, size: 15, color: Color(0xFFF59E0B)),
+        const SizedBox(width: 8),
+        const Expanded(
+          child: Text(
+            'How to read this honestly: the heatmap shows where the model looked, '
+            'not proof it is right. Poor lighting, framing, hair, or conditions '
+            'outside Acne/Eczema/Tinea can shift attention onto the wrong area. '
+            'Use it as a discussion aid with a dermatologist, not a diagnosis.',
+            style: TextStyle(
+                fontSize: 11, color: Color(0xFF92400E), height: 1.45),
           ),
         ),
+      ]),
+    );
+  }
+
+  // ── Patient-facing explainability (Score-CAM, accessible framing) ─────────
+
+  Widget _buildPatientXaiSection(ScanResult scan) {
+    final isNormal = scan.diagnosis == 'No Disease Detected';
+    final hasScoreCam =
+        scan.heatmapPath != null && File(scan.heatmapPath!).existsSync();
+    final hasVae = scan.vaeHeatmapPath != null &&
+        File(scan.vaeHeatmapPath!).existsSync();
+    final imgPath = hasScoreCam
+        ? scan.heatmapPath
+        : hasVae
+            ? scan.vaeHeatmapPath
+            : null;
+    final hasImg = imgPath != null;
+
+    // Clinical-grade but accessible explanation text.
+    final String explanation;
+    if (isNormal) {
+      explanation =
+          'A Variational Autoencoder (VAE) reconstructed your skin image and '
+          'measured how much it deviated from healthy skin it was trained on. '
+          'The warmer regions below are where reconstruction error was highest. '
+          'Overall the deviation stayed below the anomaly threshold, so no '
+          'Acne, Eczema, or Tinea pattern was flagged.';
+    } else {
+      explanation =
+          'This map was produced by Score-CAM, an explainable-AI method. The '
+          'warmer (red) regions are the areas the classifier weighted most '
+          'heavily when predicting ${scan.diagnosis}; cooler (green/blue) '
+          'regions had little influence on the result. Use it to check the AI '
+          'focused on the actual lesion rather than the background.';
+    }
+
+    return _stageCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _stageLabel(Icons.lightbulb_outline,
+            'WHY THIS RESULT?  (EXPLAINABLE AI)'),
+        const SizedBox(height: 12),
+        if (hasImg) ...[
+          GestureDetector(
+            onTap: () => context.push(AppRoutes.xaiHeatmap, extra: scan),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Stack(
+                alignment: Alignment.bottomRight,
+                children: [
+                  Image.file(File(imgPath),
+                      width: double.infinity, height: 200, fit: BoxFit.cover),
+                  Container(
+                    margin: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.55),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.fullscreen, color: Colors.white, size: 14),
+                      SizedBox(width: 4),
+                      Text('Tap to expand',
+                          style: TextStyle(color: Colors.white, fontSize: 11)),
+                    ]),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          AttentionLegendBar(
+            highLabel: isNormal ? 'High deviation' : 'High attention',
+            lowLabel: isNormal ? 'Low deviation' : 'Low attention',
+          ),
+          const SizedBox(height: 12),
+        ],
+        Text(
+          explanation,
+          style: const TextStyle(
+              fontSize: 12, color: AppColors.textPrimary, height: 1.55),
+        ),
+        if (!isNormal && scan.xaiRationale != null) ...[
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.primaryLight,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Text(scan.xaiRationale!,
+                style: const TextStyle(
+                    fontSize: 12, color: AppColors.primary, height: 1.45)),
+          ),
+        ],
+        const SizedBox(height: 12),
+        _buildLimitationsNote(scan),
       ]),
     );
   }
@@ -1538,20 +1746,68 @@ class _AnalysisResultsScreenState
               const SizedBox(height: 16),
             ],
 
-            // Stage 1: VAE
-            if (scan != null)
+            // Specialist-only toggle for pipeline details
+            if (user?.role == 'specialist') ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.science_outlined,
+                            size: 18, color: AppColors.primary),
+                        const SizedBox(width: 10),
+                        const Text(
+                          'AI Pipeline Details',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Switch(
+                      value: _showPipelineDetails,
+                      onChanged: (value) {
+                        setState(() => _showPipelineDetails = value);
+                      },
+                      activeColor: AppColors.primary,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // Stage 1: VAE (specialist only, optional)
+            if (scan != null && user?.role == 'specialist' && _showPipelineDetails)
               _revealSection(
                   show: _showVae, child: _buildVaeSection(scan)),
 
-            // Stage 2: EfficientNet CNN
-            if (scan != null)
+            // Stage 2: EfficientNet CNN (specialist only, optional)
+            if (scan != null && user?.role == 'specialist' && _showPipelineDetails)
               _revealSection(
                   show: _showCnn, child: _buildCnnSection(scan)),
 
-            // Stage 3: Score-CAM
-            if (scan != null)
+            // Stage 3: Score-CAM (specialist only, optional)
+            if (scan != null && user?.role == 'specialist' && _showPipelineDetails)
               _revealSection(
                   show: _showScoreCam, child: _buildScoreCamSection(scan)),
+
+            // Confidence-margin / uncertainty note (hidden for normal scans)
+            if (scan != null)
+              Builder(builder: (_) {
+                final note = _buildUncertaintyNote(scan);
+                if (note == null) return const SizedBox.shrink();
+                return _revealSection(show: _showVerdict, child: note);
+              }),
 
             // Final verdict + actions
             if (scan != null)
@@ -1565,14 +1821,23 @@ class _AnalysisResultsScreenState
                 ),
               ),
 
-            // Disease info + timing (revealed after verdict)
-            if (scan != null) ...[
+            // Disease info + timing (specialist only, optional)
+            if (scan != null && user?.role == 'specialist' && _showPipelineDetails) ...[
               _revealSection(
                   show: _showExtras,
                   child: _buildDiseaseInfoCard(scan)),
               _revealSection(
                   show: _showExtras,
                   child: _buildTimingCard(scan)),
+            ] else if (scan != null) ...[
+              // Output + explainability fallback — shown to patients, and to
+              // specialists who have switched the full pipeline details off.
+              _revealSection(
+                  show: _showExtras,
+                  child: _buildPatientXaiSection(scan)),
+              _revealSection(
+                  show: _showExtras,
+                  child: _buildDiseaseInfoCard(scan)),
             ],
           ],
         ),

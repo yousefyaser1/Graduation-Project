@@ -26,11 +26,23 @@ class _AnalyzingScreenState extends State<AnalyzingScreen>
   late final AnimationController _rotateController;
 
   int _currentStep = 0;
-  final List<String> _steps = [
-    'Preprocessing image...',
-    'Detecting anomalies...',
-    'Running AI model...',
-    'Generating heatmap...',
+  final List<({String title, String subtitle})> _steps = const [
+    (
+      title: 'Preprocessing image',
+      subtitle: 'Normalising and resizing your photo for the models.',
+    ),
+    (
+      title: 'Detecting anomalies (VAE)',
+      subtitle: 'Checking which areas look unusual versus healthy skin.',
+    ),
+    (
+      title: 'Classifying condition (EfficientNet)',
+      subtitle: 'Weighing the evidence for Acne, Eczema, and Tinea.',
+    ),
+    (
+      title: 'Explaining the result (Score-CAM)',
+      subtitle: 'Mapping which regions drove the prediction.',
+    ),
   ];
 
   @override
@@ -75,6 +87,7 @@ class _AnalyzingScreenState extends State<AnalyzingScreen>
           timestamp: DateTime.now(),
           anomalyRatio: result.anomalyRatio,
           vaeHeatmapPath: result.vaeHeatmapPath,
+          preprocessMs: result.preprocessMs,
           vaeMs: result.vaeMs,
           cnnMs: result.cnnMs,
           scoreCamMs: result.scoreCamMs,
@@ -89,8 +102,11 @@ class _AnalyzingScreenState extends State<AnalyzingScreen>
           classProbabilities: result.classProbabilities,
           timestamp: DateTime.now(),
           heatmapPath: result.heatmapPath,
+          classHeatmapPaths: result.classHeatmapPaths,
+          xaiRationale: result.xaiRationale,
           anomalyRatio: result.anomalyRatio,
           vaeHeatmapPath: result.vaeHeatmapPath,
+          preprocessMs: result.preprocessMs,
           vaeMs: result.vaeMs,
           cnnMs: result.cnnMs,
           scoreCamMs: result.scoreCamMs,
@@ -267,20 +283,45 @@ class _AnalyzingScreenState extends State<AnalyzingScreen>
                             ),
                           ),
                           const SizedBox(width: 12),
-                          AnimatedDefaultTextStyle(
-                            duration: const Duration(milliseconds: 250),
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: isActive || isDone
-                                  ? FontWeight.w600
-                                  : FontWeight.w400,
-                              color: isDone
-                                  ? AppColors.success
-                                  : isActive
-                                      ? AppColors.primary
-                                      : AppColors.textSecondary,
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                AnimatedDefaultTextStyle(
+                                  duration: const Duration(milliseconds: 250),
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: isActive || isDone
+                                        ? FontWeight.w600
+                                        : FontWeight.w400,
+                                    color: isDone
+                                        ? AppColors.success
+                                        : isActive
+                                            ? AppColors.primary
+                                            : AppColors.textSecondary,
+                                  ),
+                                  child: Text(_steps[i].title),
+                                ),
+                                AnimatedSize(
+                                  duration: const Duration(milliseconds: 250),
+                                  alignment: Alignment.topLeft,
+                                  child: isActive
+                                      ? Padding(
+                                          padding:
+                                              const EdgeInsets.only(top: 2),
+                                          child: Text(
+                                            _steps[i].subtitle,
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              color: AppColors.textSecondary,
+                                              height: 1.35,
+                                            ),
+                                          ),
+                                        )
+                                      : const SizedBox.shrink(),
+                                ),
+                              ],
                             ),
-                            child: Text(_steps[i]),
                           ),
                         ],
                       ),

@@ -1,0 +1,10 @@
+VAE Evaluation Summary
+========================================
+Patch threshold   : 0.008
+Ratio threshold   : 0.2
+Overall TPR       : 68.31%  (222/325)
+
+Per-class:
+  Acne      : TPR=55.91%  n=93
+  Eczema    : TPR=76.76%  n=142
+  Tinea     : TPR=70.00%  n=90
