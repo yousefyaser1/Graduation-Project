@@ -1423,6 +1423,67 @@ class _AnalysisResultsScreenState
     );
   }
 
+  // ── Stage 4: XAI Explanation ─────────────────────────────────────────────
+
+  Widget _buildXaiExplanationSection(ScanResult scan) {
+    final isNormal = scan.diagnosis == 'No Disease Detected';
+
+    final String explanation;
+    if (isNormal) {
+      explanation =
+          'A Variational Autoencoder (VAE) learned to reconstruct healthy skin. '
+          'It scanned your image in 64×64 patches and measured reconstruction error '
+          '(MSE) for each patch. When the anomalous-patch ratio stayed below the '
+          '20% threshold, the system classified the skin as normal — no further '
+          'classification was needed.';
+    } else {
+      explanation =
+          'Score-CAM (Score-weighted Class Activation Mapping) explains the CNN '
+          'decision by selectively masking the top feature-map channels and '
+          'measuring how each channel raises or lowers the predicted probability. '
+          'The resulting heatmap above shows WHICH pixels drove the '
+          '${scan.diagnosis} prediction — warmer colours mean higher influence.';
+    }
+
+    return _stageCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _stageLabel(Icons.lightbulb_outline, 'STAGE 4 · EXPLAINABLE AI  (XAI)'),
+        const SizedBox(height: 12),
+        Text(explanation,
+            style: const TextStyle(
+                fontSize: 12, color: AppColors.textPrimary, height: 1.6)),
+        if (!isNormal && scan.xaiRationale != null) ...[
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.primaryLight,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Where the model looked',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary)),
+                const SizedBox(height: 6),
+                Text(scan.xaiRationale!,
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.primary, height: 1.5)),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        _buildLimitationsNote(scan),
+      ]),
+    );
+  }
+
   // ── Verdict (confidence + diagnosis + actions) ────────────────────────────
 
   Widget _buildVerdictSection(
@@ -1764,7 +1825,7 @@ class _AnalysisResultsScreenState
                             size: 18, color: AppColors.primary),
                         const SizedBox(width: 10),
                         const Text(
-                          'AI Pipeline Details',
+                          'Show Timing Details',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -1786,20 +1847,25 @@ class _AnalysisResultsScreenState
               const SizedBox(height: 16),
             ],
 
-            // Stage 1: VAE (specialist only, optional)
-            if (scan != null && user?.role == 'specialist' && _showPipelineDetails)
+            // Stage 1: VAE anomaly detection
+            if (scan != null)
               _revealSection(
                   show: _showVae, child: _buildVaeSection(scan)),
 
-            // Stage 2: EfficientNet CNN (specialist only, optional)
-            if (scan != null && user?.role == 'specialist' && _showPipelineDetails)
+            // Stage 2: EfficientNet CNN classification
+            if (scan != null)
               _revealSection(
                   show: _showCnn, child: _buildCnnSection(scan)),
 
-            // Stage 3: Score-CAM (specialist only, optional)
-            if (scan != null && user?.role == 'specialist' && _showPipelineDetails)
+            // Stage 3: Score-CAM explainability map
+            if (scan != null)
               _revealSection(
                   show: _showScoreCam, child: _buildScoreCamSection(scan)),
+
+            // Stage 4: XAI explanation
+            if (scan != null)
+              _revealSection(
+                  show: _showScoreCam, child: _buildXaiExplanationSection(scan)),
 
             // Confidence-margin / uncertainty note (hidden for normal scans)
             if (scan != null)
@@ -1821,23 +1887,15 @@ class _AnalysisResultsScreenState
                 ),
               ),
 
-            // Disease info + timing (specialist only, optional)
-            if (scan != null && user?.role == 'specialist' && _showPipelineDetails) ...[
+            // Disease info (everyone) + timing details (specialist toggle)
+            if (scan != null) ...[
               _revealSection(
                   show: _showExtras,
                   child: _buildDiseaseInfoCard(scan)),
-              _revealSection(
-                  show: _showExtras,
-                  child: _buildTimingCard(scan)),
-            ] else if (scan != null) ...[
-              // Output + explainability fallback — shown to patients, and to
-              // specialists who have switched the full pipeline details off.
-              _revealSection(
-                  show: _showExtras,
-                  child: _buildPatientXaiSection(scan)),
-              _revealSection(
-                  show: _showExtras,
-                  child: _buildDiseaseInfoCard(scan)),
+              if (user?.role == 'specialist' && _showPipelineDetails)
+                _revealSection(
+                    show: _showExtras,
+                    child: _buildTimingCard(scan)),
             ],
           ],
         ),

@@ -4,7 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/routing/app_router.dart';
 import '../../../models/scan_result.dart';
-import '../../../services/ai/ai_service.dart';
+import '../../../services/ai/ai_isolate_runner.dart';
 
 class AnalyzingScreen extends StatefulWidget {
   final String bodyPart;
@@ -63,10 +63,8 @@ class _AnalyzingScreenState extends State<AnalyzingScreen>
   }
 
   Future<void> _runAnalysis() async {
-    final service = AIService();
     try {
-      await service.initialize();
-      final result = await service.analyzeImage(
+      final result = await runAnalysisInBackground(
         imagePath: widget.imagePath,
         onStepChange: (step) {
           if (mounted) setState(() => _currentStep = step);

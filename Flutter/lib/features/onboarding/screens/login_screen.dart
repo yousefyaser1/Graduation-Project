@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/routing/app_router.dart';
 import '../../../providers/user_provider.dart';
+import '../../../models/user.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -241,7 +242,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 14),
 
-              // Quick demo login (skip auth for demo purposes)
+              // Quick demo login — Guest
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
@@ -259,6 +260,43 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(double.infinity, 52),
                     side: const BorderSide(color: AppColors.border),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Quick demo login — Specialist (shows full pipeline details)
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _loading
+                      ? null
+                      : () {
+                          ref.read(userProvider.notifier).setUser(
+                            User(
+                              id: 'demo-specialist',
+                              name: 'Demo Specialist',
+                              email: 'specialist@demo',
+                              role: 'specialist',
+                              createdAt: DateTime.now(),
+                            ),
+                          );
+                          context.go(AppRoutes.home);
+                        },
+                  icon: const Icon(Icons.science_outlined,
+                      color: Color(0xFF7C3AED)),
+                  label: const Text(
+                    'Continue as Specialist',
+                    style: TextStyle(
+                        color: Color(0xFF7C3AED),
+                        fontWeight: FontWeight.w600),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 52),
+                    side: const BorderSide(color: Color(0xFFDDD6FE)),
+                    backgroundColor: const Color(0xFFF5F3FF),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
                   ),

@@ -28,6 +28,7 @@ dependencies:
 
   # Local Database
   sqflite: ^2.3.0
+  sqflite_common_ffi: ^2.3.0
   path_provider: ^2.1.1
   path: ^1.8.3
 
@@ -35,7 +36,7 @@ dependencies:
   permission_handler: ^11.1.0
 
   # Utilities
-  intl: ^0.18.1
+  intl: ^0.20.2
   uuid: ^4.2.1
   equatable: ^2.0.5
   shared_preferences: ^2.2.2
@@ -58,6 +59,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.1
+  device_preview: ^1.1.0
 
 flutter:
   uses-material-design: true
