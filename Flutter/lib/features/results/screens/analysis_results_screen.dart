@@ -1807,8 +1807,10 @@ class _AnalysisResultsScreenState
               const SizedBox(height: 16),
             ],
 
-            // Specialist-only toggle for pipeline details
             if (user?.role == 'specialist') ...[
+              // ── SPECIALIST VIEW: full pipeline ──────────────────────────
+
+              // Pipeline details toggle (controls timing card)
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -1819,13 +1821,13 @@ class _AnalysisResultsScreenState
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
+                    const Row(
                       children: [
-                        const Icon(Icons.science_outlined,
+                        Icon(Icons.science_outlined,
                             size: 18, color: AppColors.primary),
-                        const SizedBox(width: 10),
-                        const Text(
-                          'Show Timing Details',
+                        SizedBox(width: 10),
+                        Text(
+                          'AI Pipeline Details',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -1836,66 +1838,92 @@ class _AnalysisResultsScreenState
                     ),
                     Switch(
                       value: _showPipelineDetails,
-                      onChanged: (value) {
-                        setState(() => _showPipelineDetails = value);
-                      },
+                      onChanged: (v) =>
+                          setState(() => _showPipelineDetails = v),
                       activeColor: AppColors.primary,
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 16),
-            ],
 
-            // Stage 1: VAE anomaly detection
-            if (scan != null)
-              _revealSection(
-                  show: _showVae, child: _buildVaeSection(scan)),
+              // Stage 1: VAE
+              if (scan != null && _showPipelineDetails)
+                _revealSection(show: _showVae, child: _buildVaeSection(scan)),
 
-            // Stage 2: EfficientNet CNN classification
-            if (scan != null)
-              _revealSection(
-                  show: _showCnn, child: _buildCnnSection(scan)),
+              // Stage 2: CNN
+              if (scan != null && _showPipelineDetails)
+                _revealSection(show: _showCnn, child: _buildCnnSection(scan)),
 
-            // Stage 3: Score-CAM explainability map
-            if (scan != null)
-              _revealSection(
-                  show: _showScoreCam, child: _buildScoreCamSection(scan)),
+              // Stage 3: Score-CAM
+              if (scan != null && _showPipelineDetails)
+                _revealSection(
+                    show: _showScoreCam,
+                    child: _buildScoreCamSection(scan)),
 
-            // Stage 4: XAI explanation
-            if (scan != null)
-              _revealSection(
-                  show: _showScoreCam, child: _buildXaiExplanationSection(scan)),
+              // Stage 4: XAI explanation
+              if (scan != null && _showPipelineDetails)
+                _revealSection(
+                    show: _showScoreCam,
+                    child: _buildXaiExplanationSection(scan)),
 
-            // Confidence-margin / uncertainty note (hidden for normal scans)
-            if (scan != null)
-              Builder(builder: (_) {
-                final note = _buildUncertaintyNote(scan);
-                if (note == null) return const SizedBox.shrink();
-                return _revealSection(show: _showVerdict, child: note);
-              }),
+              // Uncertainty note
+              if (scan != null)
+                Builder(builder: (_) {
+                  final note = _buildUncertaintyNote(scan);
+                  if (note == null) return const SizedBox.shrink();
+                  return _revealSection(show: _showVerdict, child: note);
+                }),
 
-            // Final verdict + actions
-            if (scan != null)
-              _revealSection(
-                show: _showVerdict,
-                child: _buildVerdictSection(
-                  scan,
-                  skinType: skinType,
-                  skinTone: skinTone,
-                  conditions: conditions,
+              // Verdict + actions
+              if (scan != null)
+                _revealSection(
+                  show: _showVerdict,
+                  child: _buildVerdictSection(scan,
+                      skinType: skinType,
+                      skinTone: skinTone,
+                      conditions: conditions),
                 ),
-              ),
 
-            // Disease info (everyone) + timing details (specialist toggle)
-            if (scan != null) ...[
-              _revealSection(
-                  show: _showExtras,
-                  child: _buildDiseaseInfoCard(scan)),
-              if (user?.role == 'specialist' && _showPipelineDetails)
+              // Disease info + timing
+              if (scan != null) ...[
                 _revealSection(
                     show: _showExtras,
-                    child: _buildTimingCard(scan)),
+                    child: _buildDiseaseInfoCard(scan)),
+                if (_showPipelineDetails)
+                  _revealSection(
+                      show: _showExtras, child: _buildTimingCard(scan)),
+              ],
+            ] else ...[
+              // ── GUEST / PATIENT VIEW: original clean layout ─────────────
+
+              // Uncertainty note
+              if (scan != null)
+                Builder(builder: (_) {
+                  final note = _buildUncertaintyNote(scan);
+                  if (note == null) return const SizedBox.shrink();
+                  return _revealSection(show: _showVerdict, child: note);
+                }),
+
+              // Verdict + actions
+              if (scan != null)
+                _revealSection(
+                  show: _showVerdict,
+                  child: _buildVerdictSection(scan,
+                      skinType: skinType,
+                      skinTone: skinTone,
+                      conditions: conditions),
+                ),
+
+              // Patient XAI summary + disease info
+              if (scan != null) ...[
+                _revealSection(
+                    show: _showExtras,
+                    child: _buildPatientXaiSection(scan)),
+                _revealSection(
+                    show: _showExtras,
+                    child: _buildDiseaseInfoCard(scan)),
+              ],
             ],
           ],
         ),
