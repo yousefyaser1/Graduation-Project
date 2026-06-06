@@ -96,7 +96,18 @@
       "Bash(python -c \"import tflite_runtime\")",
       "Bash(python -c \"import tensorflow as tf; print\\('tf', tf.__version__\\)\")",
       "Bash(echo \"exit-grep:$?\")",
-      "Bash(flutter test *)"
+      "Bash(flutter test *)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\hp-VICTUS\\\\Desktop\\\\DESKTOP-E798622\" -Recurse -Directory | Where-Object { $_.Name -match \"test|dataset|augment|acne|eczema|tinea\" -or $_.Name -match \"New_Aug\" } | Select-Object FullName | Select-Object -First 20)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\hp-VICTUS\" -Recurse -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -in @\\(\"acne\",\"eczema\",\"tinea\"\\) } | Select-Object FullName | Select-Object -First 15)",
+      "PowerShell(Get-ChildItem \"D:\\\\\" -Recurse -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -in @\\(\"acne\",\"eczema\",\"tinea\",\"New_Augmented_Dataset\"\\) } | Select-Object FullName | Select-Object -First 15)",
+      "PowerShell(Get-ChildItem \"D:\\\\GRAD-XAI\" -Recurse -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -in @\\(\"acne\",\"eczema\",\"tinea\",\"New_Augmented_Dataset\",\"test\"\\) } | Select-Object FullName | Select-Object -First 20)",
+      "PowerShell(Get-ChildItem \"D:\\\\CSE Year 5\" -Recurse -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match \"acne|eczema|tinea|augment|skin\" } | Select-Object FullName | Select-Object -First 15)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\hp-VICTUS\" -Recurse -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match \"New_Augmented|augmented_dataset|skin.disease\" } | Select-Object FullName)",
+      "PowerShell(flutter *)",
+      "PowerShell(Get-Command *)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(& \"C:\\\\Users\\\\hp-VICTUS\\\\flutter\\\\bin\\\\flutter.bat\" --version)",
+      "Bash(tasklist)"
     ]
   }
 }

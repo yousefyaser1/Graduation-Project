@@ -163,8 +163,12 @@ val_b2_raw   = tf.keras.utils.image_dataset_from_directory(
     batch_size=BATCH_B2, label_mode='categorical')
 
 alpha_b2, cw_b2, _ = get_class_info(train_b2_raw, NUM_CLASSES)
-eczema_idx          = class_names.index('eczema')
-cw_b2[eczema_idx]  *= 1.2
+# Fix Tinea→Eczema confusion (26 % miss rate on test set, 2026-05-29):
+# The previous ×1.2 Eczema boost was pulling borderline Tinea predictions
+# toward Eczema.  Removing it and adding a ×1.4 Tinea boost corrects the
+# class-weight imbalance that caused the confusion.
+tinea_idx          = class_names.index('tinea')
+cw_b2[tinea_idx]  *= 1.4
 print("B2 focal alpha:", [round(a, 4) for a in alpha_b2])
 print("B2 class weights:", {k: round(v, 3) for k, v in cw_b2.items()})
 

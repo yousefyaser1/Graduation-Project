@@ -19,6 +19,7 @@ import '../../features/core_workflow/screens/capture_screen.dart';
 import '../../features/core_workflow/screens/analyzing_screen.dart';
 import '../../features/core_workflow/screens/history_screen.dart';
 import '../../features/core_workflow/screens/profile_screen.dart';
+import '../../features/core_workflow/screens/tips_screen.dart';
 import '../../features/core_workflow/screens/notifications_screen.dart';
 import '../../features/core_workflow/screens/edit_profile_screen.dart';
 import '../../features/core_workflow/screens/help_support_screen.dart';
@@ -52,6 +53,7 @@ class AppRoutes {
   static const String bookAppointment     = '/book-appointment';
   static const String history             = '/history';
   static const String profile             = '/profile';
+  static const String tips                = '/tips';
   static const String notifications       = '/notifications';
   static const String editProfile         = '/edit-profile';
   static const String helpSupport         = '/help-support';
@@ -138,6 +140,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           builder: (c, s) => const HistoryScreen()),
       GoRoute(path: AppRoutes.profile,
           builder: (c, s) => const ProfileScreen()),
+      GoRoute(path: AppRoutes.tips,
+          builder: (c, s) => const TipsScreen()),
       GoRoute(path: AppRoutes.notifications,
           builder: (c, s) => const NotificationsScreen()),
       GoRoute(path: AppRoutes.editProfile,

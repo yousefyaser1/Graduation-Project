@@ -32,33 +32,58 @@ class AppBottomNav extends StatelessWidget {
             children: [
               Row(
                 children: [
+                  // Left half — Home + History.
                   Expanded(
-                    child: _NavItem(
-                      icon: Icons.home_outlined,
-                      activeIcon: Icons.home_rounded,
-                      label: 'Home',
-                      isActive: currentIndex == 0,
-                      onTap: () => context.go(AppRoutes.home),
+                    flex: 2,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _NavItem(
+                            icon: Icons.home_outlined,
+                            activeIcon: Icons.home_rounded,
+                            label: 'Home',
+                            isActive: currentIndex == 0,
+                            onTap: () => context.go(AppRoutes.home),
+                          ),
+                        ),
+                        Expanded(
+                          child: _NavItem(
+                            icon: Icons.history_outlined,
+                            activeIcon: Icons.history_rounded,
+                            label: 'History',
+                            isActive: currentIndex == 2,
+                            onTap: () => context.go(AppRoutes.history),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  Expanded(
-                    child: _NavItem(
-                      icon: Icons.history_outlined,
-                      activeIcon: Icons.history_rounded,
-                      label: 'History',
-                      isActive: currentIndex == 2,
-                      onTap: () => context.go(AppRoutes.history),
-                    ),
-                  ),
-                  // Spacer reserving room for the centered scan button.
+                  // Centered gap reserving room for the scan button.
                   const SizedBox(width: 72),
+                  // Right half — Profile + Tips.
                   Expanded(
-                    child: _NavItem(
-                      icon: Icons.person_outline,
-                      activeIcon: Icons.person_rounded,
-                      label: 'Profile',
-                      isActive: currentIndex == 3,
-                      onTap: () => context.go(AppRoutes.profile),
+                    flex: 2,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _NavItem(
+                            icon: Icons.person_outline,
+                            activeIcon: Icons.person_rounded,
+                            label: 'Profile',
+                            isActive: currentIndex == 3,
+                            onTap: () => context.go(AppRoutes.profile),
+                          ),
+                        ),
+                        Expanded(
+                          child: _NavItem(
+                            icon: Icons.lightbulb_outline,
+                            activeIcon: Icons.lightbulb,
+                            label: 'Tips',
+                            isActive: currentIndex == 4,
+                            onTap: () => context.go(AppRoutes.tips),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],

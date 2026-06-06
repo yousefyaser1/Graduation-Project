@@ -49,3 +49,13 @@ Thumbs.db
 # Claude / Kilo
 .claude/scheduled_tasks.lock
 .kilo/
+
+# Office temp / lock files
+~$*
+*.tmp
+~WRL*.tmp
+
+# Journal / manuscript (kept private, not pushed)
+SkinScan_*.docx
+build_journal*.py
+make_submission_files.py

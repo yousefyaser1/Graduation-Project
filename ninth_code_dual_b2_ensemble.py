@@ -50,7 +50,11 @@ print("Focal alpha:", [round(a, 4) for a in alpha])
 cw = class_weight.compute_class_weight(
     class_weight='balanced', classes=np.unique(y_train), y=y_train)
 cw_dict = dict(enumerate(cw))
-cw_dict[class_names.index('eczema')] *= 1.2
+# Fix Tinea→Eczema confusion (26 % miss rate on test set, 2026-05-29):
+# The previous ×1.2 Eczema boost was pulling borderline Tinea predictions
+# toward Eczema.  Removing it and adding a ×1.4 Tinea boost corrects the
+# class-weight imbalance that caused the confusion.
+cw_dict[class_names.index('tinea')] *= 1.4
 print("Class weights:", {k: round(v, 3) for k, v in cw_dict.items()})
 
 train_ds = train_raw.cache().prefetch(AUTOTUNE)

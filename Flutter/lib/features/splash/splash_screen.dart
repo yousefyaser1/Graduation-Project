@@ -42,7 +42,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     unawaited(cleanOrphanScanFiles());
 
     // Wait for the minimum splash duration
-    await Future.delayed(const Duration(milliseconds: 2400));
+    await Future.delayed(const Duration(milliseconds: 4000));
     if (!mounted) return;
 
     final restored = await ref.read(userProvider.notifier).restoreSession();
@@ -73,65 +73,50 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: Center(
-          child: FadeTransition(
-            opacity: _fadeAnim,
-            child: ScaleTransition(
-              scale: _scaleAnim,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 96,
-                    height: 96,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.biotech_outlined,
-                      color: Colors.white,
-                      size: 52,
-                    ),
+      backgroundColor: Colors.white,
+      body: Center(
+        child: FadeTransition(
+          opacity: _fadeAnim,
+          child: ScaleTransition(
+            scale: _scaleAnim,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.asset(
+                  'assets/images/logo.png',
+                  width: 200,
+                  height: 200,
+                  fit: BoxFit.contain,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'SkinScan AI',
+                  style: TextStyle(
+                    color: Color(0xFF1E3A8A),
+                    fontSize: 32,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
                   ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'SkinScan AI',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 32,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5,
-                    ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'AI-Powered Skin Analysis',
+                  style: TextStyle(
+                    color: const Color(0xFF3B82F6).withOpacity(0.85),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w400,
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'AI-Powered Skin Analysis',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.75),
-                      fontSize: 15,
-                      fontWeight: FontWeight.w400,
-                    ),
+                ),
+                const SizedBox(height: 56),
+                const SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: Color(0xFF3B82F6),
                   ),
-                  const SizedBox(height: 56),
-                  SizedBox(
-                    width: 28,
-                    height: 28,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      color: Colors.white.withOpacity(0.7),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
