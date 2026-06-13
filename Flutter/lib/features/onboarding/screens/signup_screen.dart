@@ -197,19 +197,19 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: RichText(
-                        text: TextSpan(
-                          style: const TextStyle(
+                        text: const TextSpan(
+                          style: TextStyle(
                               fontSize: 13,
                               color: AppColors.textSecondary),
                           children: [
-                            const TextSpan(text: 'I agree to the '),
+                            TextSpan(text: 'I agree to the '),
                             TextSpan(
                               text: 'Terms of Service',
                               style: TextStyle(
                                   color: AppColors.primary,
                                   fontWeight: FontWeight.w600),
                             ),
-                            const TextSpan(text: ' and '),
+                            TextSpan(text: ' and '),
                             TextSpan(
                               text: 'Privacy Policy',
                               style: TextStyle(
@@ -254,7 +254,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                           fontSize: 14, color: AppColors.textSecondary)),
                   GestureDetector(
                     onTap: () => context.pop(),
-                    child: Text('Sign in',
+                    child: const Text('Sign in',
                         style: TextStyle(
                             fontSize: 14,
                             color: AppColors.primary,

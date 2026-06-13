@@ -44,7 +44,7 @@ class _PersonalInfoScreenState extends ConsumerState<PersonalInfoScreen> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(primary: AppColors.primary),
+            colorScheme: const ColorScheme.light(primary: AppColors.primary),
           ),
           child: child!,
         );
@@ -77,9 +77,9 @@ class _PersonalInfoScreenState extends ConsumerState<PersonalInfoScreen> {
           onPressed: () => context.pop(),
         ),
         title: RichText(
-          text: TextSpan(
+          text: const TextSpan(
             children: [
-              const TextSpan(
+              TextSpan(
                 text: 'SkinScan ',
                 style: TextStyle(
                     color: AppColors.textPrimary,
@@ -117,7 +117,7 @@ class _PersonalInfoScreenState extends ConsumerState<PersonalInfoScreen> {
                 Expanded(
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
+                    child: const LinearProgressIndicator(
                       value: 2 / 5,
                       backgroundColor: AppColors.border,
                       color: AppColors.primary,
@@ -183,8 +183,8 @@ class _PersonalInfoScreenState extends ConsumerState<PersonalInfoScreen> {
                                 height: 44,
                                 decoration: BoxDecoration(
                                   color: isSelected
-                                      ? AppColors.primary.withOpacity(0.15)
-                                      : AppColors.border.withOpacity(0.4),
+                                      ? AppColors.primary.withValues(alpha: 0.15)
+                                      : AppColors.border.withValues(alpha: 0.4),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(

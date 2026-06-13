@@ -66,9 +66,9 @@ class _SkinTypeScreenState extends ConsumerState<SkinTypeScreen> {
           onPressed: () => context.pop(),
         ),
         title: RichText(
-          text: TextSpan(
+          text: const TextSpan(
             children: [
-              const TextSpan(
+              TextSpan(
                 text: 'SkinScan ',
                 style: TextStyle(
                     color: AppColors.textPrimary,
@@ -105,7 +105,7 @@ class _SkinTypeScreenState extends ConsumerState<SkinTypeScreen> {
                 Expanded(
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
+                    child: const LinearProgressIndicator(
                       value: 3 / 5,
                       backgroundColor: AppColors.border,
                       color: AppColors.primary,
@@ -152,7 +152,7 @@ class _SkinTypeScreenState extends ConsumerState<SkinTypeScreen> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
+                          color: Colors.black.withValues(alpha: 0.04),
                           blurRadius: 6,
                           offset: const Offset(0, 2),
                         ),
@@ -212,7 +212,7 @@ class _SkinTypeScreenState extends ConsumerState<SkinTypeScreen> {
                           boxShadow: isSelected
                               ? [
                                   BoxShadow(
-                                    color: AppColors.primary.withOpacity(0.35),
+                                    color: AppColors.primary.withValues(alpha: 0.35),
                                     blurRadius: 8,
                                     spreadRadius: 1,
                                   ),

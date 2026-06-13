@@ -25,7 +25,7 @@ class DatabaseService {
 
     return openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -67,6 +67,8 @@ class DatabaseService {
         created_at INTEGER NOT NULL
       )
     ''');
+
+    await db.execute(_createAppointmentsTable);
 
     // Seed demo users
     for (final user in DemoUsers.getAllDemoUsers()) {
@@ -110,7 +112,30 @@ class DatabaseService {
         }
       }
     }
+    if (oldVersion < 6) {
+      try {
+        await db.execute(_createAppointmentsTable);
+      } catch (_) {
+        // Table may already exist
+      }
+    }
   }
+
+  static const String _createAppointmentsTable = '''
+    CREATE TABLE appointments (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      patient_name TEXT NOT NULL,
+      doctor_name TEXT NOT NULL,
+      specialty TEXT NOT NULL,
+      date_label TEXT NOT NULL,
+      time_label TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'Scheduled',
+      scan_id TEXT,
+      diagnosis TEXT,
+      created_at INTEGER NOT NULL
+    )
+  ''';
 
   Future<void> _seedDemoUsers() async {
     final db = await database;
@@ -178,5 +203,38 @@ class DatabaseService {
     final db = await database;
     await db.update('users', user,
         where: 'id = ?', whereArgs: [user['id']]);
+  }
+
+  // ── Appointments ─────────────────────────────────────────────────────────────
+
+  Future<void> insertAppointment(Map<String, dynamic> appt) async {
+    final db = await database;
+    await db.insert('appointments', appt,
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  /// All appointments, newest first. Specialists see every patient's bookings.
+  Future<List<Map<String, dynamic>>> getAllAppointments() async {
+    final db = await database;
+    return db.query('appointments', orderBy: 'created_at DESC');
+  }
+
+  /// Appointments booked by a single patient, newest first.
+  Future<List<Map<String, dynamic>>> getAppointmentsForUser(
+      String userId) async {
+    final db = await database;
+    return db.query('appointments',
+        where: 'user_id = ?', whereArgs: [userId], orderBy: 'created_at DESC');
+  }
+
+  Future<void> updateAppointmentStatus(String id, String status) async {
+    final db = await database;
+    await db.update('appointments', {'status': status},
+        where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> deleteAppointment(String id) async {
+    final db = await database;
+    await db.delete('appointments', where: 'id = ?', whereArgs: [id]);
   }
 }

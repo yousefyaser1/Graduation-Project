@@ -35,7 +35,9 @@ class _XAIHeatmapScreenState extends State<XAIHeatmapScreen> {
                 : null;
     final hasOriginal =
         scan != null && File(scan.imagePath).existsSync();
-    final method = isNormal ? 'VAE Reconstruction Error' : 'Score-CAM';
+    final isInconclusive = scan?.diagnosis == 'Inconclusive';
+    final isGateMap = isNormal || isInconclusive;
+    final method = isGateMap ? 'Disease-Evidence Map' : 'Score-CAM';
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -103,15 +105,16 @@ class _XAIHeatmapScreenState extends State<XAIHeatmapScreen> {
                   const SizedBox(height: 4),
                 ],
                 AttentionLegendBar(
-                  highLabel: isNormal ? 'High deviation' : 'High attention',
-                  lowLabel: isNormal ? 'Low deviation' : 'Low attention',
+                  highLabel: isGateMap ? 'More disease-like' : 'High attention',
+                  lowLabel: isGateMap ? 'Less disease-like' : 'Low attention',
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  isNormal
-                      ? 'Warmer regions are where the VAE struggled most to '
-                          'reconstruct your skin. Overall deviation stayed below '
-                          'the anomaly threshold, so no condition was flagged.'
+                  isGateMap
+                      ? 'Warmer regions are where covering the skin lowered the '
+                          "gate's disease score the most — the most disease-like "
+                          'areas (occlusion sensitivity). Drag the slider to '
+                          'compare against your original photo.'
                       : 'Warmer regions are where the classifier focused most '
                           'when predicting ${scan?.diagnosis ?? 'this result'}. '
                           'Drag the slider to compare against your original photo.',

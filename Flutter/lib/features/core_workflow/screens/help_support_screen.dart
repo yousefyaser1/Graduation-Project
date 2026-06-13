@@ -22,7 +22,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
     {
       'q': 'Is my data private and secure?',
       'a':
-          'Yes. All images and results are encrypted and stored securely. We never share your personal data with third parties without your explicit consent.',
+          'Yes. All analysis runs entirely on your device — your images and results are never uploaded to a server, and nothing is shared with third parties. Scans are stored locally on this device only, and your account password is never stored in plain text (it is salted and hashed). Deleting a scan removes it from local storage.',
     },
     {
       'q': 'How do I get the best scan results?',
@@ -99,7 +99,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                   const SizedBox(height: 6),
                   Text('Search our knowledge base',
                       style: TextStyle(
-                          color: Colors.white.withOpacity(0.8), fontSize: 13)),
+                          color: Colors.white.withValues(alpha: 0.8), fontSize: 13)),
                   const SizedBox(height: 14),
                   TextField(
                     controller: _searchController,
@@ -213,12 +213,12 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: AppColors.border),
               ),
-              child: Row(
+              child: const Row(
                 children: [
-                  const Icon(Icons.info_outline,
+                  Icon(Icons.info_outline,
                       color: AppColors.textSecondary, size: 20),
-                  const SizedBox(width: 12),
-                  const Expanded(
+                  SizedBox(width: 12),
+                  Expanded(
                     child: Text(
                       'SkinScan AI v1.0.0\nFor medical emergencies, call 911.',
                       style: TextStyle(

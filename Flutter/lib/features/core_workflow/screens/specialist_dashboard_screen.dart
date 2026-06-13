@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/routing/app_router.dart';
+import '../../../models/appointment.dart';
 import '../../../models/scan_result.dart';
+import '../../../providers/appointment_provider.dart';
 import '../../../providers/scan_provider.dart';
 
 class SpecialistDashboardScreen extends ConsumerStatefulWidget {
@@ -21,14 +23,6 @@ class _SpecialistDashboardScreenState
   String _searchQuery = '';
   final _searchController = TextEditingController();
   bool _showSearch = false;
-
-  // Hardcoded schedule (appointments need a backend — kept as demo)
-  final _appointments = [
-    {'patient': 'Ahmed Yasser', 'time': '09:00 AM', 'type': 'Follow-up', 'color': 0xFF3B82F6},
-    {'patient': 'Sara Ali', 'time': '10:30 AM', 'type': 'First Consultation', 'color': 0xFFEF4444},
-    {'patient': 'Omar Khalid', 'time': '12:00 PM', 'type': 'Results Review', 'color': 0xFF8B5CF6},
-    {'patient': 'Lina Mahmoud', 'time': '02:30 PM', 'type': 'Follow-up', 'color': 0xFF10B981},
-  ];
 
   @override
   void dispose() {
@@ -90,6 +84,10 @@ class _SpecialistDashboardScreenState
   @override
   Widget build(BuildContext context) {
     final scansAsync = ref.watch(scanListProvider);
+    final appointments = ref.watch(allAppointmentsProvider).maybeWhen(
+          data: (a) => a,
+          orElse: () => const <Appointment>[],
+        );
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -168,7 +166,7 @@ class _SpecialistDashboardScreenState
               style: const TextStyle(color: AppColors.error)),
         ),
         data: (scans) {
-          if (_selectedTab == 3) return _buildScheduleTab();
+          if (_selectedTab == 3) return _buildScheduleTab(appointments);
 
           final allCards = scans.asMap().entries
               .map((e) => _scanToCard(e.value, e.key))
@@ -198,8 +196,8 @@ class _SpecialistDashboardScreenState
                         label: 'Pending\nReview',
                         color: AppColors.warning),
                     _SpecialistStat(
-                        value: '${_appointments.length}',
-                        label: 'Scheduled\nToday',
+                        value: '${appointments.where((a) => a.status == 'Scheduled').length}',
+                        label: 'Upcoming\nAppts',
                         color: const Color(0xFF8B5CF6)),
                     _SpecialistStat(
                         value: avgConf,
@@ -284,7 +282,32 @@ class _SpecialistDashboardScreenState
     );
   }
 
-  Widget _buildScheduleTab() {
+  Widget _buildScheduleTab(List<Appointment> appointments) {
+    final scheduled =
+        appointments.where((a) => a.status == 'Scheduled').toList();
+
+    if (appointments.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.calendar_today_outlined,
+                size: 48, color: AppColors.textSecondary),
+            SizedBox(height: 12),
+            Text('No appointments booked yet',
+                style:
+                    TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+            SizedBox(height: 6),
+            Text('Patient bookings will appear here.',
+                style:
+                    TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          ],
+        ),
+      );
+    }
+
+    const palette = [0xFF3B82F6, 0xFFEF4444, 0xFF8B5CF6, 0xFF10B981];
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -307,28 +330,34 @@ class _SpecialistDashboardScreenState
               ),
               const SizedBox(width: 14),
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Today',
+                const Text('Schedule',
                     style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: AppColors.textPrimary)),
                 Text(
-                  '${_appointments.length} appointments scheduled',
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  '${scheduled.length} upcoming • ${appointments.length} total',
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary),
                 ),
               ]),
             ],
           ),
         ),
         const SizedBox(height: 16),
-        const Text('Upcoming Appointments',
+        const Text('Appointments',
             style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary)),
         const SizedBox(height: 12),
-        ..._appointments.map((appt) {
-          final c = Color(appt['color'] as int);
+        ...appointments.asMap().entries.map((entry) {
+          final appt = entry.value;
+          final c = Color(palette[entry.key % palette.length]);
+          final isScheduled = appt.status == 'Scheduled';
+          final subtitle = appt.diagnosis != null
+              ? '${appt.diagnosis} • ${appt.doctorName}'
+              : appt.doctorName;
           return Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Container(
@@ -344,33 +373,45 @@ class _SpecialistDashboardScreenState
                     width: 52,
                     height: 52,
                     decoration: BoxDecoration(
-                        color: c.withOpacity(0.12),
+                        color: c.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(10)),
                     child: Icon(Icons.access_time_rounded, color: c, size: 24),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(appt['patient'] as String,
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      Text(appt.patientName,
                           style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
                               color: AppColors.textPrimary)),
                       const SizedBox(height: 3),
-                      Text(appt['type'] as String,
+                      Text(subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               fontSize: 12, color: AppColors.textSecondary)),
                     ]),
                   ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                        color: c.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20)),
-                    child: Text(appt['time'] as String,
-                        style: TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.w700, color: c)),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text('${appt.dateLabel}, ${appt.timeLabel}',
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: c)),
+                      const SizedBox(height: 4),
+                      Text(appt.status,
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: isScheduled
+                                  ? AppColors.success
+                                  : AppColors.textSecondary)),
+                    ],
                   ),
                 ],
               ),
@@ -500,7 +541,7 @@ class _PatientCard extends StatelessWidget {
             Container(
               width: 44,
               height: 44,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: AppColors.primaryLight,
                 shape: BoxShape.circle,
               ),

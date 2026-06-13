@@ -1,30 +1,34 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+// Unit tests for the User model. (Replaces the default counter smoke test,
+// which never matched this app and always failed.)
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:dermatology_ai_app/main.dart';
+import 'package:dermatology_ai_app/models/user.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget( SkinScanApp());
+  group('User', () {
+    test('round-trips through toMap/fromMap', () {
+      final user = User(
+        id: 'u1',
+        name: 'Jane Doe',
+        email: 'jane@example.com',
+        role: 'patient',
+        age: 30,
+        gender: 'Female',
+        medicalHistory: 'Skin Type: oily | Skin Tone: Light',
+        createdAt: DateTime.fromMillisecondsSinceEpoch(1700000000000),
+      );
+      expect(User.fromMap(user.toMap()), equals(user));
+    });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    test('fromMap applies sensible defaults for missing fields', () {
+      final user = User.fromMap(const {
+        'id': 'u2',
+        'name': 'No Role',
+        'created_at': 0,
+      });
+      expect(user.role, 'patient');
+      expect(user.email, '');
+      expect(user.age, isNull);
+    });
   });
 }

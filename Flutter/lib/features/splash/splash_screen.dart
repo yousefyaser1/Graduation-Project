@@ -41,8 +41,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // Fire-and-forget so it never delays navigation.
     unawaited(cleanOrphanScanFiles());
 
-    // Wait for the minimum splash duration
-    await Future.delayed(const Duration(milliseconds: 4000));
+    // Minimum splash duration: long enough for the logo animation to land,
+    // short enough not to feel sluggish on launch.
+    await Future.delayed(const Duration(milliseconds: 2200));
     if (!mounted) return;
 
     final restored = await ref.read(userProvider.notifier).restoreSession();
@@ -102,7 +103,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 Text(
                   'AI-Powered Skin Analysis',
                   style: TextStyle(
-                    color: const Color(0xFF3B82F6).withOpacity(0.85),
+                    color: const Color(0xFF3B82F6).withValues(alpha: 0.85),
                     fontSize: 15,
                     fontWeight: FontWeight.w400,
                   ),

@@ -1,11 +1,14 @@
 """
 Device-equivalent pipeline verification.
 
-Mirrors the Flutter `AIService` exactly (no TTA, single forward pass):
-  - VAE gate: 64x64 patches, stride 32, input normalised to [0,1],
-    MSE > 0.008 = anomalous patch; ratio > 0.20 = ANOMALY.
+Mirrors the Flutter `AIService` exactly. These constants MUST stay identical
+to lib/services/ai/ai_service.dart — if you change one, change the other, or
+this script stops predicting device behaviour:
+  - VAE gate: 64x64 patches, stride 64 (== patch size, no gaps), input
+    normalised to [0,1], MSE > 0.004 = anomalous patch; ratio > 0.20 = ANOMALY.
   - CNN ensemble: resize to 260/300 (bilinear), input kept in [0,255]
-    (EfficientNet rescales internally), 50/50 average of softmax outputs.
+    (EfficientNet rescales internally), per-model 4-way flip TTA (matches
+    _useTta in ai_service.dart), then 50/50 average of the two softmaxes.
 
 Run:
   python verify_pipeline.py [N_PER_CLASS_CNN] [N_PER_CLASS_VAE]
@@ -34,10 +37,11 @@ TEST = os.path.join(ROOT, "New_Augmented_Dataset", "test")
 CLASSES = ["Acne", "Eczema", "Tinea"]          # alphabetical = training order
 FOLDERS = {"Acne": "acne", "Eczema": "eczema", "Tinea": "tinea"}
 
-PATCH, STRIDE = 64, 32
-ANOM_THRESH, ANOM_RATIO = 0.004, 0.15   # must match ai_service.dart
+PATCH, STRIDE = 64, 64                  # must match ai_service.dart (_patchSize/_stride)
+ANOM_THRESH, ANOM_RATIO = 0.004, 0.20   # must match ai_service.dart
 B2, B3 = (260, 260), (300, 300)
 MAX_W = 1280                                    # Dart downsample cap
+USE_TTA = True                                  # must match _useTta in ai_service.dart
 
 vae = Interpreter(model_path=os.path.join(MODELS, "vae_model.tflite")); vae.allocate_tensors()
 b2 = Interpreter(model_path=os.path.join(MODELS, "cnn_b2_model.tflite")); b2.allocate_tensors()
@@ -58,17 +62,30 @@ def load_rgb(path):
     return img
 
 
+def _tta_views(x):
+    # identity, horizontal flip, vertical flip, both — matches ai_service.dart.
+    if not USE_TTA:
+        return [x]
+    return [x, x[:, ::-1], x[::-1, :], x[::-1, ::-1]]
+
+
+def _cnn_one(interp, img, size):
+    r = cv2.resize(img, size, interpolation=cv2.INTER_LINEAR)   # [0,255]
+    return np.mean([_run(interp, v[np.newaxis].astype(np.float32))
+                    for v in _tta_views(r)], axis=0)
+
+
 def cnn_predict(img):
-    p2 = _run(b2, cv2.resize(img, B2)[np.newaxis].astype(np.float32))   # [0,255]
-    p3 = _run(b3, cv2.resize(img, B3)[np.newaxis].astype(np.float32))
-    return (p2 + p3) / 2.0
+    return (_cnn_one(b2, img, B2) + _cnn_one(b3, img, B3)) / 2.0
 
 
 def vae_ratio(img):
     h, w, _ = img.shape
     anom = total = 0
-    for y in range(0, h - PATCH, STRIDE):
-        for x in range(0, w - PATCH, STRIDE):
+    # +1 so the final patch at y == h-PATCH is included, matching the Dart
+    # grid: gridH = (h - PATCH) // STRIDE + 1.
+    for y in range(0, h - PATCH + 1, STRIDE):
+        for x in range(0, w - PATCH + 1, STRIDE):
             patch = img[y:y + PATCH, x:x + PATCH].astype(np.float32) / 255.0
             if float(np.ravel(_run(vae, patch[np.newaxis]))[0]) > ANOM_THRESH:
                 anom += 1

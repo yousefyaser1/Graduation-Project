@@ -32,16 +32,16 @@ class _AnalyzingScreenState extends State<AnalyzingScreen>
       subtitle: 'Normalising and resizing your photo for the models.',
     ),
     (
-      title: 'Detecting anomalies (VAE)',
-      subtitle: 'Checking which areas look unusual versus healthy skin.',
+      title: 'Screening: normal vs disease',
+      subtitle: 'Checking whether the skin looks like a condition at all.',
     ),
     (
       title: 'Classifying condition (EfficientNet)',
       subtitle: 'Weighing the evidence for Acne, Eczema, and Tinea.',
     ),
     (
-      title: 'Explaining the result (Score-CAM)',
-      subtitle: 'Mapping which regions drove the prediction.',
+      title: 'Explaining the result (XAI)',
+      subtitle: 'Mapping which regions drove the result.',
     ),
   ];
 
@@ -74,7 +74,27 @@ class _AnalyzingScreenState extends State<AnalyzingScreen>
       if (!mounted) return;
 
       final ScanResult scan;
-      if (result.isNormal) {
+      if (result.isInconclusive) {
+        // Gate gray zone: the model abstained on a type, but the gate occlusion
+        // map + rationale still explain WHERE it looked. The verdict screen
+        // renders a "retake" card for this diagnosis string.
+        scan = ScanResult(
+          id: const Uuid().v4(),
+          imagePath: widget.imagePath,
+          bodyPart: widget.bodyPart,
+          diagnosis: 'Inconclusive',
+          confidence: result.confidence,
+          classProbabilities: const {},
+          timestamp: DateTime.now(),
+          anomalyRatio: result.anomalyRatio,
+          vaeHeatmapPath: result.vaeHeatmapPath,
+          xaiRationale: result.xaiRationale,
+          preprocessMs: result.preprocessMs,
+          vaeMs: result.vaeMs,
+          cnnMs: result.cnnMs,
+          scoreCamMs: result.scoreCamMs,
+        );
+      } else if (result.isNormal) {
         scan = ScanResult(
           id: const Uuid().v4(),
           imagePath: widget.imagePath,
@@ -85,6 +105,7 @@ class _AnalyzingScreenState extends State<AnalyzingScreen>
           timestamp: DateTime.now(),
           anomalyRatio: result.anomalyRatio,
           vaeHeatmapPath: result.vaeHeatmapPath,
+          xaiRationale: result.xaiRationale,
           preprocessMs: result.preprocessMs,
           vaeMs: result.vaeMs,
           cnnMs: result.cnnMs,

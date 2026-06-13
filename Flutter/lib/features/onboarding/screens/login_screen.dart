@@ -201,7 +201,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 alignment: Alignment.centerRight,
                 child: TextButton(
                   onPressed: () => context.push(AppRoutes.forgotPassword),
-                  child: Text(
+                  child: const Text(
                     'Forgot password?',
                     style: TextStyle(
                         fontSize: 13,
@@ -228,16 +228,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 14),
 
-              Row(
+              const Row(
                 children: [
-                  const Expanded(child: Divider(color: AppColors.border)),
+                  Expanded(child: Divider(color: AppColors.border)),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    padding: EdgeInsets.symmetric(horizontal: 12),
                     child: Text('or',
                         style: TextStyle(
                             color: AppColors.textSecondary, fontSize: 13)),
                   ),
-                  const Expanded(child: Divider(color: AppColors.border)),
+                  Expanded(child: Divider(color: AppColors.border)),
                 ],
               ),
               const SizedBox(height: 14),
@@ -314,7 +314,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   GestureDetector(
                     onTap: () => context.push(AppRoutes.signup),
-                    child: Text(
+                    child: const Text(
                       'Sign up',
                       style: TextStyle(
                           fontSize: 14,

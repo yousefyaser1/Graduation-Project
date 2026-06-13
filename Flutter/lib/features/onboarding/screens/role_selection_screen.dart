@@ -38,9 +38,9 @@ class _RoleSelectionScreenState extends ConsumerState<RoleSelectionScreen> {
           onPressed: () => context.pop(),
         ),
         title: RichText(
-          text: TextSpan(
+          text: const TextSpan(
             children: [
-              const TextSpan(
+              TextSpan(
                 text: 'SkinScan ',
                 style: TextStyle(
                   color: AppColors.textPrimary,
@@ -56,7 +56,7 @@ class _RoleSelectionScreenState extends ConsumerState<RoleSelectionScreen> {
                   fontSize: 16,
                 ),
               ),
-              const TextSpan(
+              TextSpan(
                 text: '  |  Role Selection',
                 style: TextStyle(
                   color: AppColors.textSecondary,
@@ -96,7 +96,7 @@ class _RoleSelectionScreenState extends ConsumerState<RoleSelectionScreen> {
                 Expanded(
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
+                    child: const LinearProgressIndicator(
                       value: 1 / 5,
                       backgroundColor: AppColors.border,
                       color: AppColors.primary,
@@ -246,7 +246,7 @@ class _RoleCard extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),

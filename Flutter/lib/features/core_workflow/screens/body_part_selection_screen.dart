@@ -12,6 +12,24 @@ class _Hotspot {
   const _Hotspot(this.id, this.rect);
 }
 
+/// Clips to a hotspot's fractional rect scaled up to the rendered image box.
+class _FractionalRectClipper extends CustomClipper<Rect> {
+  final Rect fraction;
+  const _FractionalRectClipper(this.fraction);
+
+  @override
+  Rect getClip(Size size) => Rect.fromLTWH(
+        fraction.left * size.width,
+        fraction.top * size.height,
+        fraction.width * size.width,
+        fraction.height * size.height,
+      );
+
+  @override
+  bool shouldReclip(_FractionalRectClipper oldClipper) =>
+      oldClipper.fraction != fraction;
+}
+
 class BodyPartSelectionScreen extends StatefulWidget {
   const BodyPartSelectionScreen({super.key});
 
@@ -58,6 +76,11 @@ class _BodyPartSelectionScreenState extends State<BodyPartSelectionScreen> {
     });
   }
 
+  void _flip() {
+    HapticFeedback.selectionClick();
+    setState(() => _showFront = !_showFront);
+  }
+
   String _prettify(String part) {
     return part
         .split(' ')
@@ -68,6 +91,15 @@ class _BodyPartSelectionScreenState extends State<BodyPartSelectionScreen> {
   @override
   Widget build(BuildContext context) {
     final spots = _showFront ? _frontSpots : _backSpots;
+    final asset = _showFront
+        ? 'assets/images/body_front.png'
+        : 'assets/images/body_back.png';
+
+    // The selected hotspot, if it belongs to the side currently shown.
+    _Hotspot? selectedSpot;
+    for (final s in spots) {
+      if (s.id == _selected) selectedSpot = s;
+    }
 
     return Scaffold(
       // Dimmed backdrop so the white card reads as a floating step card.
@@ -91,12 +123,12 @@ class _BodyPartSelectionScreenState extends State<BodyPartSelectionScreen> {
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
               child: Column(
                 children: [
-                  // ── Header: "Step 3" + close ──
+                  // ── Header: title + close ──
                   Stack(
                     alignment: Alignment.center,
                     children: [
                       const Text(
-                        'Step 3',
+                        'Select Body Part',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w700,
@@ -127,8 +159,9 @@ class _BodyPartSelectionScreenState extends State<BodyPartSelectionScreen> {
                     child: Row(
                       children: [
                         _Chevron(
+                          key: const ValueKey('flip-left'),
                           icon: Icons.chevron_left,
-                          onTap: () => setState(() => _showFront = !_showFront),
+                          onTap: _flip,
                         ),
                         Expanded(
                           child: Center(
@@ -140,39 +173,71 @@ class _BodyPartSelectionScreenState extends State<BodyPartSelectionScreen> {
                                   final h = c.maxHeight;
                                   return Stack(
                                     children: [
+                                      // Base figure.
                                       AnimatedSwitcher(
                                         duration:
                                             const Duration(milliseconds: 250),
                                         child: Image.asset(
-                                          _showFront
-                                              ? 'assets/images/body_front.png'
-                                              : 'assets/images/body_back.png',
+                                          asset,
                                           key: ValueKey(_showFront),
+                                          width: w,
+                                          height: h,
                                           fit: BoxFit.contain,
                                         ),
                                       ),
-                                      // Selection highlight + tap targets.
+                                      // Selection highlight. The illustration
+                                      // is redrawn tinted (srcIn keeps color
+                                      // only where the PNG is opaque) and
+                                      // clipped to the selected hotspot, so
+                                      // the shade hugs the chosen body part
+                                      // instead of filling a whole rectangle.
+                                      IgnorePointer(
+                                        child: AnimatedSwitcher(
+                                          duration:
+                                              const Duration(milliseconds: 180),
+                                          child: selectedSpot == null
+                                              ? SizedBox(
+                                                  key: const ValueKey(
+                                                      'no-selection'),
+                                                  width: w,
+                                                  height: h,
+                                                )
+                                              : ClipRect(
+                                                  key: ValueKey(
+                                                      'highlight-${selectedSpot.id}'),
+                                                  clipper:
+                                                      _FractionalRectClipper(
+                                                          selectedSpot.rect),
+                                                  child: Image.asset(
+                                                    asset,
+                                                    width: w,
+                                                    height: h,
+                                                    fit: BoxFit.contain,
+                                                    color: AppColors.primary
+                                                        .withValues(
+                                                            alpha: 0.45),
+                                                    colorBlendMode:
+                                                        BlendMode.srcIn,
+                                                  ),
+                                                ),
+                                        ),
+                                      ),
+                                      // Invisible tap targets.
                                       for (final s in spots)
                                         Positioned(
                                           left: s.rect.left * w,
                                           top: s.rect.top * h,
                                           width: s.rect.width * w,
                                           height: s.rect.height * h,
-                                          child: GestureDetector(
-                                            behavior:
-                                                HitTestBehavior.translucent,
-                                            onTap: () => _selectPart(s.id),
-                                            child: AnimatedContainer(
-                                              duration: const Duration(
-                                                  milliseconds: 180),
-                                              decoration: BoxDecoration(
-                                                color: _selected == s.id
-                                                    ? AppColors.primary
-                                                        .withValues(alpha: 0.28)
-                                                    : Colors.transparent,
-                                                borderRadius:
-                                                    BorderRadius.circular(14),
-                                              ),
+                                          child: Semantics(
+                                            button: true,
+                                            selected: _selected == s.id,
+                                            label: _prettify(s.id),
+                                            child: GestureDetector(
+                                              key: ValueKey('hotspot_${s.id}'),
+                                              behavior:
+                                                  HitTestBehavior.translucent,
+                                              onTap: () => _selectPart(s.id),
                                             ),
                                           ),
                                         ),
@@ -184,56 +249,78 @@ class _BodyPartSelectionScreenState extends State<BodyPartSelectionScreen> {
                           ),
                         ),
                         _Chevron(
+                          key: const ValueKey('flip-right'),
                           icon: Icons.chevron_right,
-                          onTap: () => setState(() => _showFront = !_showFront),
+                          onTap: _flip,
                         ),
                       ],
                     ),
                   ),
 
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 10),
 
-                  // ── Footer: hint or Scan button ──
-                  if (_selected == null)
-                    const Column(
-                      children: [
-                        Icon(Icons.arrow_upward,
-                            size: 28, color: AppColors.textPrimary),
-                        SizedBox(height: 8),
-                        Text(
-                          'Tap to choose body part',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    )
-                  else
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: ElevatedButton(
-                        onPressed: () => context.push(
-                          AppRoutes.capture,
-                          extra: _selected,
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.textPrimary,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        child: Text(
-                          'Scan: ${_prettify(_selected!)}',
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
+                  // ── Front/back caption ──
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    child: Text(
+                      _showFront ? 'FRONT VIEW' : 'BACK VIEW',
+                      key: ValueKey(_showFront),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2,
+                        color: AppColors.textSecondary,
                       ),
                     ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // ── Footer: hint or Scan button ──
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    child: _selected == null
+                        ? const Column(
+                            key: ValueKey('hint'),
+                            children: [
+                              Icon(Icons.touch_app_outlined,
+                                  size: 26, color: AppColors.textSecondary),
+                              SizedBox(height: 6),
+                              Text(
+                                'Tap the body part you want to scan',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          )
+                        : SizedBox(
+                            key: const ValueKey('scan'),
+                            width: double.infinity,
+                            height: 56,
+                            child: ElevatedButton(
+                              onPressed: () => context.push(
+                                AppRoutes.capture,
+                                extra: _prettify(_selected!),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.textPrimary,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              child: Text(
+                                'Scan: ${_prettify(_selected!)}',
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                  ),
                 ],
               ),
             ),
@@ -251,7 +338,7 @@ class _Chevron extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
 
-  const _Chevron({required this.icon, required this.onTap});
+  const _Chevron({super.key, required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {

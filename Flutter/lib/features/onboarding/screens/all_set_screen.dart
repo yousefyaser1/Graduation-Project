@@ -90,7 +90,7 @@ class _AllSetScreenState extends ConsumerState<AllSetScreen>
                 const SizedBox(height: 40),
 
                 // Feature highlights
-                _FeatureTile(
+                const _FeatureTile(
                   icon: Icons.document_scanner_outlined,
                   iconColor: AppColors.primary,
                   iconBg: AppColors.primaryLight,
@@ -98,18 +98,18 @@ class _AllSetScreenState extends ConsumerState<AllSetScreen>
                   subtitle: 'Instant results powered by deep learning',
                 ),
                 const SizedBox(height: 14),
-                _FeatureTile(
+                const _FeatureTile(
                   icon: Icons.history_outlined,
-                  iconColor: const Color(0xFF8B5CF6),
-                  iconBg: const Color(0xFFEDE9FE),
+                  iconColor: Color(0xFF8B5CF6),
+                  iconBg: Color(0xFFEDE9FE),
                   title: 'Track Your History',
                   subtitle: 'Monitor changes in your skin over time',
                 ),
                 const SizedBox(height: 14),
-                _FeatureTile(
+                const _FeatureTile(
                   icon: Icons.calendar_month_outlined,
                   iconColor: AppColors.success,
-                  iconBg: const Color(0xFFDCFCE7),
+                  iconBg: Color(0xFFDCFCE7),
                   title: 'Book Appointments',
                   subtitle: 'Connect with dermatology specialists',
                 ),
@@ -124,7 +124,7 @@ class _AllSetScreenState extends ConsumerState<AllSetScreen>
                       if (userId != null) {
                         await SessionService().markOnboardingComplete(userId);
                       }
-                      if (mounted) context.go(AppRoutes.home);
+                      if (context.mounted) context.go(AppRoutes.home);
                     },
                     child: const Text('Start Scanning'),
                   ),

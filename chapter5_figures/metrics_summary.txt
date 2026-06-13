@@ -1,0 +1,23 @@
+=== CNN ensemble (B2+B3, single-pass) on held-out test set ===
+n(full)  = 362   accuracy(full)  = 88.40%
+n(clean) = 242   accuracy(clean) = 88.43%   (leaked removed = 120, 33.1%)
+
+AUC (one-vs-rest):
+  Acne     0.9919
+  Eczema   0.9525
+  Tinea    0.9423
+  macro    0.9622
+
+Per-class (FULL):  class  precision  recall  f1  support
+  Acne           0.9368  0.8990  0.9175  99
+  Eczema         0.8924  0.8924  0.8924  158
+  Tinea          0.8257  0.8571  0.8411  105
+  Macro Avg      0.8850  0.8828  0.8837  362
+  Weighted Avg   0.8852  0.8840  0.8844  362
+
+Per-class (CLEAN/honest):  class  precision  recall  f1  support
+  Acne           0.9296  0.8800  0.9041  75
+  Eczema         0.9352  0.8783  0.9058  115
+  Tinea          0.7460  0.9038  0.8174  52
+  Macro Avg      0.8703  0.8874  0.8758  242
+  Weighted Avg   0.8928  0.8843  0.8863  242

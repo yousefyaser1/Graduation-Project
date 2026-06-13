@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -102,10 +103,38 @@ class _CaptureScreenState extends State<CaptureScreen> {
       }
       final brightness = lumSum / 10000.0;
 
+      // Skin-coverage check: the AI is trained on close-up skin photos, so a
+      // frame that is mostly background (wall, desk, wide room shot) is
+      // out-of-distribution and produces unreliable results. Same lenient
+      // warm-foreground heuristic as the training patch extractor: skin of any
+      // tone is warm (R >= B), not near-black, not blown out, and not flat
+      // bright grey. Lenient on purpose — it must not reject dark skin tones.
+      int skinCount = 0;
+      for (int y = 0; y < 100; y++) {
+        for (int x = 0; x < 100; x++) {
+          final p = small.getPixel(x, y);
+          final r = p.r.toDouble(), g = p.g.toDouble(), b = p.b.toDouble();
+          final v = (r + g + b) / 3.0;
+          final mx = math.max(r, math.max(g, b));
+          final mn = math.min(r, math.min(g, b));
+          final sat = mx > 0 ? (mx - mn) / mx : 0.0;
+          final isSkin = v > 30 &&
+              v < 248 &&
+              r >= b - 5 &&
+              !(sat < 0.05 && v > 153);
+          if (isSkin) skinCount++;
+        }
+      }
+      final skinFraction = skinCount / 10000.0;
+
       final issues = <String>[];
       if (sharpness < 3.0) issues.add('Image appears blurry — hold the camera steady');
       if (brightness < 40.0) issues.add('Image is too dark — use better lighting');
       if (brightness > 220.0) issues.add('Image is overexposed — reduce glare');
+      if (skinFraction < 0.55) {
+        issues.add(
+            'Much of the frame does not look like skin — move closer so the skin area fills the photo');
+      }
 
       return issues.isEmpty ? null : issues.join('\n');
     } catch (_) {
@@ -243,7 +272,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Use natural light and hold the camera steady for best results.',
+                      'Fill the frame with the affected area, use natural light, and hold steady for best results.',
                       style: TextStyle(
                           fontSize: 12,
                           color: Color(0xFF92400E),
@@ -465,8 +494,8 @@ class _ViewfinderPainter extends CustomPainter {
     final w = size.width;
     final h = size.height;
 
-    canvas.drawLine(Offset(0, len), const Offset(0, 0), paint);
-    canvas.drawLine(const Offset(0, 0), Offset(len, 0), paint);
+    canvas.drawLine(const Offset(0, len), const Offset(0, 0), paint);
+    canvas.drawLine(const Offset(0, 0), const Offset(len, 0), paint);
     canvas.drawLine(Offset(w - len, 0), Offset(w, 0), paint);
     canvas.drawLine(Offset(w, 0), Offset(w, len), paint);
     canvas.drawLine(Offset(0, h - len), Offset(0, h), paint);

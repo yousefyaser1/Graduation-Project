@@ -59,3 +59,21 @@ Thumbs.db
 SkinScan_*.docx
 build_journal*.py
 make_submission_files.py
+
+# Local training/eval datasets & artifacts (large, regenerable from scripts)
+normal_patches_domain/
+hand_patches/
+normal_datasets/
+gate_kit/
+model_backups/
+scorecam_check/
+heatmap_debug/
+
+# Packaged kits
+*.zip
+
+# Eval output logs & scratch artifacts
+out_*.txt
+hair_test_out.txt
+montage_*.png
+normal_test.jpg

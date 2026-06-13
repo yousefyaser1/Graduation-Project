@@ -87,9 +87,9 @@ class _MedicalHistoryScreenState extends ConsumerState<MedicalHistoryScreen> {
           onPressed: () => context.pop(),
         ),
         title: RichText(
-          text: TextSpan(
+          text: const TextSpan(
             children: [
-              const TextSpan(
+              TextSpan(
                 text: 'SkinScan ',
                 style: TextStyle(
                     color: AppColors.textPrimary,
@@ -130,7 +130,7 @@ class _MedicalHistoryScreenState extends ConsumerState<MedicalHistoryScreen> {
                       Expanded(
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(4),
-                          child: LinearProgressIndicator(
+                          child: const LinearProgressIndicator(
                             value: 4 / 5,
                             backgroundColor: AppColors.border,
                             color: AppColors.primary,

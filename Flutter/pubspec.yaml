@@ -49,6 +49,9 @@ dependencies:
   # Logging
   logger: ^2.0.2+1
 
+  # Password hashing (PBKDF2-HMAC-SHA256)
+  crypto: ^3.0.3
+
   # TensorFlow Lite
   tflite_flutter: ^0.12.0
 
@@ -59,6 +62,8 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.1
+
+  # Dev-only: cross-device preview harness (not bundled in the shipping app).
   device_preview: ^1.1.0
 
 flutter:

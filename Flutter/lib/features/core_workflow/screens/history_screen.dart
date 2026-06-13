@@ -126,6 +126,13 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                     color: AppColors.textPrimary),
               ),
         actions: [
+          if (!_searching)
+            IconButton(
+              tooltip: 'Progression',
+              icon: const Icon(Icons.timeline_outlined,
+                  color: AppColors.textPrimary),
+              onPressed: () => context.push(AppRoutes.progression),
+            ),
           IconButton(
             icon: Icon(
               _searching ? Icons.close : Icons.search_rounded,
@@ -192,8 +199,8 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                     const Icon(Icons.error_outline,
                         color: AppColors.error, size: 40),
                     const SizedBox(height: 12),
-                    Text('Error loading history',
-                        style: const TextStyle(
+                    const Text('Error loading history',
+                        style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
                             color: AppColors.textPrimary)),

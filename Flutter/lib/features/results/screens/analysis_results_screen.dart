@@ -90,11 +90,21 @@ class _AnalysisResultsScreenState
       'description':
           'The AI screening found no patterns consistent with Acne, Eczema, or Tinea. This system screens for these three conditions only — other skin conditions are outside its detection range.',
       'symptoms': <String>[
-        'No anomalous patterns detected by VAE',
-        'Skin texture within normal reconstruction range',
+        'Disease-screening gate scored below its action threshold',
+        'No region looked disease-like enough to classify',
       ],
       'advice':
           'Continue regular self-examination and see a dermatologist annually, or sooner if you notice new, changing, or concerning skin changes.',
+    },
+    'Inconclusive': {
+      'description':
+          'The screening could not make a confident call on this photo. It likely needs better framing or lighting, or it shows skin the AI cannot read reliably (it screens for Acne, Eczema, and Tinea only).',
+      'symptoms': <String>[
+        'Disease probability landed in the uncertain mid-range',
+        'Not clearly normal, not clearly one of the three conditions',
+      ],
+      'advice':
+          'Retake the photo: fill the frame with the skin area, use good even lighting, and hold the camera steady and in focus. If it stays inconclusive or you are concerned, see a dermatologist.',
     },
   };
 
@@ -209,7 +219,7 @@ class _AnalysisResultsScreenState
                       fontWeight: pw.FontWeight.bold,
                       color: PdfColors.blue700)),
               pw.Text('Dermatological Screening Report',
-                  style: pw.TextStyle(
+                  style: const pw.TextStyle(
                       fontSize: 9, color: PdfColors.grey600)),
             ],
           ),
@@ -224,10 +234,10 @@ class _AnalysisResultsScreenState
             children: [
               pw.Text(
                   'AI-assisted screening only — not a medical diagnosis.',
-                  style: pw.TextStyle(
+                  style: const pw.TextStyle(
                       fontSize: 7, color: PdfColors.grey500)),
               pw.Text('Page ${ctx.pageNumber} of ${ctx.pagesCount}',
-                  style: pw.TextStyle(
+                  style: const pw.TextStyle(
                       fontSize: 7, color: PdfColors.grey500)),
             ],
           ),
@@ -236,10 +246,10 @@ class _AnalysisResultsScreenState
           // Patient/scan header
           pw.Container(
             padding: const pw.EdgeInsets.all(14),
-            decoration: pw.BoxDecoration(
+            decoration: const pw.BoxDecoration(
               color: PdfColors.blue50,
               borderRadius:
-                  const pw.BorderRadius.all(pw.Radius.circular(8)),
+                  pw.BorderRadius.all(pw.Radius.circular(8)),
             ),
             child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -256,7 +266,7 @@ class _AnalysisResultsScreenState
                             if (user.gender != null)
                               'Gender: ${user.gender}',
                           ].join('  •  '),
-                          style: pw.TextStyle(
+                          style: const pw.TextStyle(
                               fontSize: 10,
                               color: PdfColors.grey600)),
                     pw.SizedBox(height: 6),
@@ -267,7 +277,7 @@ class _AnalysisResultsScreenState
                             fontSize: 10,
                             fontWeight: pw.FontWeight.bold)),
                     pw.Text(scan.bodyPart,
-                        style: pw.TextStyle(fontSize: 10)),
+                        style: const pw.TextStyle(fontSize: 10)),
                     pw.SizedBox(width: 16),
                     pw.Text('Date: ',
                         style: pw.TextStyle(
@@ -276,7 +286,7 @@ class _AnalysisResultsScreenState
                     pw.Text(
                         DateFormat('dd MMM yyyy, HH:mm')
                             .format(scan.timestamp.toLocal()),
-                        style: pw.TextStyle(fontSize: 10)),
+                        style: const pw.TextStyle(fontSize: 10)),
                   ]),
                 ]),
           ),
@@ -333,7 +343,7 @@ class _AnalysisResultsScreenState
                           pw.CrossAxisAlignment.start,
                       children: [
                     pw.Text('AI Diagnosis',
-                        style: pw.TextStyle(
+                        style: const pw.TextStyle(
                             fontSize: 9,
                             color: PdfColors.grey600)),
                     pw.SizedBox(height: 4),
@@ -346,7 +356,7 @@ class _AnalysisResultsScreenState
                                 : PdfColors.blue900)),
                     pw.SizedBox(height: 3),
                     pw.Text('Confidence: $confidence%',
-                        style: pw.TextStyle(
+                        style: const pw.TextStyle(
                             fontSize: 11,
                             color: PdfColors.grey700)),
                   ])),
@@ -389,7 +399,7 @@ class _AnalysisResultsScreenState
                         width: 60,
                         child: pw.Text(e.key,
                             style:
-                                pw.TextStyle(fontSize: 10))),
+                                const pw.TextStyle(fontSize: 10))),
                     pw.Expanded(
                         child: pw.LinearProgressIndicator(
                       value: e.value.clamp(0.0, 1.0),
@@ -407,22 +417,22 @@ class _AnalysisResultsScreenState
             pw.SizedBox(height: 12),
           ],
 
-          // VAE stage
+          // Gate stage
           if (scan.anomalyRatio != null) ...[
-            pw.Text('Stage 1 — VAE Anomaly Detection',
+            pw.Text('Stage 1 — Normal vs Disease Gate',
                 style: pw.TextStyle(
                     fontSize: 10,
                     fontWeight: pw.FontWeight.bold,
                     color: PdfColors.grey700)),
             pw.SizedBox(height: 4),
             pw.Text(
-                'Anomaly ratio: ${(scan.anomalyRatio! * 100).toStringAsFixed(1)}%  (threshold: 15%)',
-                style: pw.TextStyle(
+                'Disease probability: ${(scan.anomalyRatio! * 100).toStringAsFixed(1)}%  (normal below 60%; 60–90% inconclusive; 90%+ classified)',
+                style: const pw.TextStyle(
                     fontSize: 10, color: PdfColors.grey600)),
             pw.Text(
                 isNormal
-                    ? 'Result: No anomaly — classified as normal skin.'
-                    : 'Result: Anomaly detected — forwarded to CNN classifier.',
+                    ? 'Result: Below the 60% threshold — classified as normal skin.'
+                    : 'Result: Above the 60% threshold — flagged for review.',
                 style: pw.TextStyle(
                     fontSize: 10,
                     color: isNormal
@@ -440,8 +450,8 @@ class _AnalysisResultsScreenState
                     color: PdfColors.grey700)),
             pw.SizedBox(height: 4),
             pw.Text(
-                'Preprocess: ${scan.preprocessMs ?? 0}ms  |  VAE: ${scan.vaeMs}ms  |  CNN: ${scan.cnnMs ?? 0}ms  |  Score-CAM: ${scan.scoreCamMs ?? 0}ms  |  Total: ${(scan.preprocessMs ?? 0) + (scan.vaeMs ?? 0) + (scan.cnnMs ?? 0) + (scan.scoreCamMs ?? 0)}ms',
-                style: pw.TextStyle(
+                'Preprocess: ${scan.preprocessMs ?? 0}ms  |  Gate: ${scan.vaeMs}ms  |  CNN: ${scan.cnnMs ?? 0}ms  |  Score-CAM: ${scan.scoreCamMs ?? 0}ms  |  Total: ${(scan.preprocessMs ?? 0) + (scan.vaeMs ?? 0) + (scan.cnnMs ?? 0) + (scan.scoreCamMs ?? 0)}ms',
+                style: const pw.TextStyle(
                     fontSize: 10, color: PdfColors.grey600)),
             pw.SizedBox(height: 12),
           ],
@@ -467,7 +477,7 @@ class _AnalysisResultsScreenState
                             fontWeight: pw.FontWeight.bold)),
                     pw.SizedBox(height: 5),
                     pw.Text(info['description'] as String,
-                        style: pw.TextStyle(
+                        style: const pw.TextStyle(
                             fontSize: 10, lineSpacing: 2)),
                     pw.SizedBox(height: 8),
                     pw.Text('Common Symptoms:',
@@ -479,7 +489,7 @@ class _AnalysisResultsScreenState
                               padding: const pw.EdgeInsets.only(
                                   left: 8, top: 2),
                               child: pw.Text('• $s',
-                                  style: pw.TextStyle(
+                                  style: const pw.TextStyle(
                                       fontSize: 10)),
                             )),
                     pw.SizedBox(height: 6),
@@ -488,7 +498,7 @@ class _AnalysisResultsScreenState
                             fontSize: 10,
                             fontWeight: pw.FontWeight.bold)),
                     pw.Text(info['advice'] as String,
-                        style: pw.TextStyle(
+                        style: const pw.TextStyle(
                             fontSize: 10, lineSpacing: 2)),
                   ]),
             ),
@@ -516,9 +526,11 @@ class _AnalysisResultsScreenState
                   pw.Text(
                       'This report was generated by SkinScan AI, an educational screening tool. '
                       'It is NOT a medical diagnosis and must NOT replace consultation with a qualified '
-                      'dermatologist or healthcare provider. Model accuracy: ~92% on validation set '
-                      '(Acne, Eczema, Tinea only). All processing occurred on-device — no data was transmitted.',
-                      style: pw.TextStyle(
+                      'dermatologist or healthcare provider. Measured accuracy is ~90% on a curated '
+                      'Acne/Eczema/Tinea test set and is typically lower on real-world photos; it cannot '
+                      'detect healthy skin or conditions outside these three. All processing occurred '
+                      'on-device — no data was transmitted.',
+                      style: const pw.TextStyle(
                           fontSize: 8,
                           color: PdfColors.orange900,
                           lineSpacing: 2)),
@@ -623,7 +635,7 @@ class _AnalysisResultsScreenState
                   color: AppColors.textSecondary)),
           const SizedBox(height: 8),
           const Text(
-            'The VAE anomaly detector found reconstruction error below the 15% threshold — no patterns consistent with Acne, Eczema, or Tinea were present.',
+            'The normal-vs-disease gate scored this skin below its action threshold — no region was disease-like enough to flag as Acne, Eczema, or Tinea. The disease-evidence map highlights where the most disease-like skin was, if any.',
             style: TextStyle(
                 fontSize: 12, color: AppColors.textPrimary, height: 1.55),
           ),
@@ -690,6 +702,147 @@ class _AnalysisResultsScreenState
             child: const Text('Scan Again',
                 style:
                     TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          ),
+        ),
+      ]),
+      const SizedBox(height: 10),
+      _buildPdfButton(),
+    ]);
+  }
+
+  /// Verdict card for the gate "gray zone" — the AI abstained rather than risk a
+  /// confident wrong label (the old "normal skin → Tinea" failure). Amber, not
+  /// red/green: it's neither a clear condition nor a clean bill of health.
+  Widget _buildInconclusiveVerdictSection(ScanResult scan) {
+    final pct = ((scan.anomalyRatio ?? 0) * 100).round();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // Amber header card
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFB45309), Color(0xFFF59E0B)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.help_outline,
+                color: Colors.white, size: 32),
+          ),
+          const SizedBox(width: 16),
+          const Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Inconclusive',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700)),
+              SizedBox(height: 4),
+              Text("Couldn't get a confident read — please retake the photo.",
+                  style: TextStyle(color: Colors.white70, fontSize: 12)),
+            ]),
+          ),
+        ]),
+      ),
+      const SizedBox(height: 12),
+
+      // Explanation + retake guidance
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFFCD34D)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('What this means',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary)),
+          const SizedBox(height: 8),
+          Text(
+            'The disease probability ($pct%) landed in the uncertain mid-range — '
+            'not clearly normal, but not a confident match for Acne, Eczema, or '
+            'Tinea either. Rather than guess, the AI is asking for a clearer photo.',
+            style: const TextStyle(
+                fontSize: 12, color: AppColors.textPrimary, height: 1.55),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFBEB),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFFCD34D)),
+            ),
+            child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+              Icon(Icons.camera_alt_outlined, size: 14, color: Color(0xFFF59E0B)),
+              SizedBox(width: 8),
+              Expanded(
+                  child: Text(
+                'For a better result: fill the frame with the skin area, use good '
+                'even lighting, and hold the camera steady and in focus.',
+                style: TextStyle(fontSize: 11, color: Color(0xFF92400E)),
+              )),
+            ]),
+          ),
+        ]),
+      ),
+      const SizedBox(height: 20),
+
+      // Action buttons
+      Row(children: [
+        Expanded(
+          child: ElevatedButton(
+            onPressed: _saved ? null : (_saving ? null : _saveToHistory),
+            style: ElevatedButton.styleFrom(
+              backgroundColor:
+                  _saved ? AppColors.success : const Color(0xFFB45309),
+              disabledBackgroundColor:
+                  _saved ? AppColors.success : AppColors.border,
+              minimumSize: const Size(double.infinity, 48),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: _saving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                : Text(_saved ? 'Saved!' : 'Save to History',
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600)),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: ElevatedButton(
+            onPressed: () => context.go(AppRoutes.capture),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryLight,
+              foregroundColor: AppColors.primary,
+              elevation: 0,
+              minimumSize: const Size(double.infinity, 48),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Retake Photo',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           ),
         ),
       ]),
@@ -826,19 +979,16 @@ class _AnalysisResultsScreenState
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             _TimingChip(label: 'Preprocess', ms: pre),
-            _TimingChip(label: 'VAE', ms: vae),
+            _TimingChip(label: 'Gate', ms: vae),
             _TimingChip(label: 'CNN', ms: cnn),
-            _TimingChip(label: 'Score-CAM', ms: cam),
+            _TimingChip(label: 'Explain', ms: cam),
             _TimingChip(label: 'Total', ms: total, isPrimary: true),
           ],
         ),
         const SizedBox(height: 10),
-        Text(
-          total < 2000
-              ? 'Within the ≤2 s target. All AI ran fully on-device — no data left the phone.'
-              : 'Processing complete. All AI ran fully on-device — no data left the phone.',
-          style:
-              const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+        const Text(
+          'All AI ran fully on-device — no data left the phone.',
+          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
         ),
       ]),
     );
@@ -918,22 +1068,28 @@ class _AnalysisResultsScreenState
     ]);
   }
 
-  // ── Stage 1: VAE ─────────────────────────────────────────────────────────
+  // ── Stage 1: Normal-vs-Disease gate ──────────────────────────────────────
 
   Widget _buildVaeSection(ScanResult scan) {
-    final isAnomaly = scan.diagnosis != 'No Disease Detected';
+    final isInconclusive = scan.diagnosis == 'Inconclusive';
+    final isAnomaly =
+        !isInconclusive && scan.diagnosis != 'No Disease Detected';
     final ratio = scan.anomalyRatio;
-    final color = isAnomaly ? const Color(0xFFF97316) : AppColors.success;
-    final label = isAnomaly ? 'Skin condition detected' : 'No anomaly found';
+    final color = isInconclusive
+        ? const Color(0xFFF59E0B)
+        : (isAnomaly ? const Color(0xFFF97316) : AppColors.success);
+    final label = isInconclusive
+        ? 'Inconclusive — needs a clearer photo'
+        : (isAnomaly ? 'Skin condition detected' : 'No condition found');
     final hasVaeImg = scan.vaeHeatmapPath != null &&
         File(scan.vaeHeatmapPath!).existsSync();
 
     return _stageCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _stageLabel(Icons.radar, 'STAGE 1 · ANOMALY DETECTION  (VAE)'),
+        _stageLabel(Icons.radar, 'STAGE 1 · NORMAL vs DISEASE GATE'),
         const SizedBox(height: 12),
 
-        // VAE heatmap image
+        // Gate disease-evidence (occlusion) map — shown for normal/inconclusive
         if (hasVaeImg) ...[
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
@@ -946,8 +1102,14 @@ class _AnalysisResultsScreenState
           ),
           const SizedBox(height: 8),
           const AttentionLegendBar(
-            highLabel: 'High MSE (anomalous)',
-            lowLabel: 'Low MSE (normal)',
+            highLabel: 'More disease-like',
+            lowLabel: 'Less disease-like',
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Occlusion sensitivity: regions that, when covered, lowered the '
+            "gate's disease score the most — i.e. what made this look (un)healthy.",
+            style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
           ),
           const SizedBox(height: 12),
         ],
@@ -969,7 +1131,7 @@ class _AnalysisResultsScreenState
         if (ratio != null) ...[
           const SizedBox(height: 10),
           Row(children: [
-            const Text('Anomaly ratio',
+            const Text('Disease probability',
                 style: TextStyle(
                     fontSize: 12, color: AppColors.textSecondary)),
             const SizedBox(width: 10),
@@ -992,8 +1154,10 @@ class _AnalysisResultsScreenState
           const SizedBox(height: 4),
           Text(
             isAnomaly
-                ? 'Ratio exceeded the 15% threshold — passed to CNN.'
-                : 'Ratio below threshold — classified as normal skin.',
+                ? 'At/above 90% — passed to the CNN classifier.'
+                : isInconclusive
+                    ? '60–90% — too uncertain to commit; reported inconclusive.'
+                    : 'Below 60% — classified as normal skin.',
             style: const TextStyle(
                 fontSize: 11, color: AppColors.textSecondary),
           ),
@@ -1012,7 +1176,7 @@ class _AnalysisResultsScreenState
               'STAGE 2 · CLASSIFICATION  (EFFICIENTNET)'),
           const SizedBox(height: 12),
           const Text(
-            'Skipped — VAE anomaly gate returned normal.',
+            'Skipped — the screening gate classified this as normal skin.',
             style:
                 TextStyle(fontSize: 13, color: AppColors.textSecondary),
           ),
@@ -1218,9 +1382,26 @@ class _AnalysisResultsScreenState
                     width: double.infinity,
                     height: 190,
                     fit: BoxFit.cover)
-                : CustomPaint(
-                    painter: _HeatmapPainter(),
-                    child: const SizedBox(width: double.infinity, height: 190),
+                : Container(
+                    width: double.infinity,
+                    height: 120,
+                    color: const Color(0xFFF1F5F9),
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.grid_off,
+                            size: 28, color: AppColors.textSecondary),
+                        SizedBox(height: 8),
+                        Text(
+                          'Score-CAM runs only once a disease is classified.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
                   ),
           ),
         ),
@@ -1230,8 +1411,10 @@ class _AnalysisResultsScreenState
               ? (selected == scan.diagnosis
                   ? 'Highlighted regions drove the $selected prediction.'
                   : 'Regions that would support $selected.')
-              : scan.diagnosis == 'No Disease Detected'
-                  ? 'No anomaly detected — heatmap not generated.'
+              : (scan.diagnosis == 'No Disease Detected' ||
+                      scan.diagnosis == 'Inconclusive')
+                  ? 'No disease was classified, so there is no class to attribute. '
+                      'See the disease-evidence map in Stage 1 for where the gate looked.'
                   : 'Score-CAM heatmap unavailable.',
           style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
         ),
@@ -1306,10 +1489,10 @@ class _AnalysisResultsScreenState
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFFCD34D)),
       ),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Icon(Icons.info_outline, size: 15, color: Color(0xFFF59E0B)),
-        const SizedBox(width: 8),
-        const Expanded(
+      child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(Icons.info_outline, size: 15, color: Color(0xFFF59E0B)),
+        SizedBox(width: 8),
+        Expanded(
           child: Text(
             'How to read this honestly: the heatmap shows where the model looked, '
             'not proof it is right. Poor lighting, framing, hair, or conditions '
@@ -1327,26 +1510,38 @@ class _AnalysisResultsScreenState
 
   Widget _buildPatientXaiSection(ScanResult scan) {
     final isNormal = scan.diagnosis == 'No Disease Detected';
+    final isInconclusive = scan.diagnosis == 'Inconclusive';
+    // Normal / Inconclusive carry the gate occlusion map (vaeHeatmapPath); a
+    // classified disease carries the Score-CAM map (heatmapPath).
+    final isGateMap = isNormal || isInconclusive;
     final hasScoreCam =
         scan.heatmapPath != null && File(scan.heatmapPath!).existsSync();
-    final hasVae = scan.vaeHeatmapPath != null &&
+    final hasGate = scan.vaeHeatmapPath != null &&
         File(scan.vaeHeatmapPath!).existsSync();
     final imgPath = hasScoreCam
         ? scan.heatmapPath
-        : hasVae
+        : hasGate
             ? scan.vaeHeatmapPath
             : null;
     final hasImg = imgPath != null;
 
-    // Clinical-grade but accessible explanation text.
+    // Accessible explanation text, matched to the actual XAI method used.
     final String explanation;
     if (isNormal) {
       explanation =
-          'A Variational Autoencoder (VAE) reconstructed your skin image and '
-          'measured how much it deviated from healthy skin it was trained on. '
-          'The warmer regions below are where reconstruction error was highest. '
-          'Overall the deviation stayed below the anomaly threshold, so no '
-          'Acne, Eczema, or Tinea pattern was flagged.';
+          'Because no condition was found, there is no class to attribute. '
+          'Instead, the disease-evidence map below uses occlusion sensitivity: '
+          'small parts of your photo were covered one at a time and the gate was '
+          're-checked. Warmer regions are where covering the skin lowered the '
+          'disease score the most — the most disease-like areas. Overall it '
+          'stayed below the threshold, so no Acne, Eczema, or Tinea was flagged.';
+    } else if (isInconclusive) {
+      explanation =
+          'The screening could not commit to a confident result. The map below '
+          'uses occlusion sensitivity — covering parts of the photo and '
+          're-checking the gate — to show which regions looked the most '
+          'disease-like. Warmer means more disease-like. A clearer, well-lit '
+          'photo of the area will usually give a more definite result.';
     } else {
       explanation =
           'This map was produced by Score-CAM, an explainable-AI method. The '
@@ -1392,8 +1587,8 @@ class _AnalysisResultsScreenState
           ),
           const SizedBox(height: 8),
           AttentionLegendBar(
-            highLabel: isNormal ? 'High deviation' : 'High attention',
-            lowLabel: isNormal ? 'Low deviation' : 'Low attention',
+            highLabel: isGateMap ? 'More disease-like' : 'High attention',
+            lowLabel: isGateMap ? 'Less disease-like' : 'Low attention',
           ),
           const SizedBox(height: 12),
         ],
@@ -1402,7 +1597,7 @@ class _AnalysisResultsScreenState
           style: const TextStyle(
               fontSize: 12, color: AppColors.textPrimary, height: 1.55),
         ),
-        if (!isNormal && scan.xaiRationale != null) ...[
+        if (scan.xaiRationale != null) ...[
           const SizedBox(height: 10),
           Container(
             width: double.infinity,
@@ -1427,21 +1622,24 @@ class _AnalysisResultsScreenState
 
   Widget _buildXaiExplanationSection(ScanResult scan) {
     final isNormal = scan.diagnosis == 'No Disease Detected';
+    final isInconclusive = scan.diagnosis == 'Inconclusive';
+    final isGateMap = isNormal || isInconclusive;
 
     final String explanation;
-    if (isNormal) {
+    if (isGateMap) {
       explanation =
-          'A Variational Autoencoder (VAE) learned to reconstruct healthy skin. '
-          'It scanned your image in 64×64 patches and measured reconstruction error '
-          '(MSE) for each patch. When the anomalous-patch ratio stayed below the '
-          '20% threshold, the system classified the skin as normal — no further '
-          'classification was needed.';
+          'No disease was classified, so there is no CNN class to attribute with '
+          'Score-CAM. Instead, the disease-evidence map uses occlusion '
+          'sensitivity on the gate: a neutral patch is slid across the image and '
+          "the gate is re-run each time. Where covering the skin drops the gate's "
+          'disease score the most, that region was the strongest evidence — warmer '
+          'colours mean a larger drop.';
     } else {
       explanation =
           'Score-CAM (Score-weighted Class Activation Mapping) explains the CNN '
           'decision by selectively masking the top feature-map channels and '
           'measuring how each channel raises or lowers the predicted probability. '
-          'The resulting heatmap above shows WHICH pixels drove the '
+          'The resulting heatmap (Stage 3) shows WHICH pixels drove the '
           '${scan.diagnosis} prediction — warmer colours mean higher influence.';
     }
 
@@ -1494,6 +1692,9 @@ class _AnalysisResultsScreenState
   }) {
     if (scan.diagnosis == 'No Disease Detected') {
       return _buildNormalVerdictSection(scan);
+    }
+    if (scan.diagnosis == 'Inconclusive') {
+      return _buildInconclusiveVerdictSection(scan);
     }
 
     final confidence = (scan.confidence * 100).round();
@@ -1750,6 +1951,40 @@ class _AnalysisResultsScreenState
     ]);
   }
 
+  // ── Scope / medical disclaimer (shown for every result) ──────────────────
+
+  /// Honest scope statement. The model is a 3-class differential classifier with
+  /// no "healthy/normal" class, and on out-of-distribution real-world photos it
+  /// is forced to pick one of Acne/Eczema/Tinea. This banner sets that
+  /// expectation so a confident label on non-target or healthy skin is read as
+  /// a known scope limit, not a diagnosis.
+  Widget _buildScopeDisclaimer() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFCD34D)),
+      ),
+      child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(Icons.info_outline, size: 15, color: Color(0xFFF59E0B)),
+        SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            'This tool screens among three conditions only — Acne, Eczema, and '
+            'Tinea — and assumes a skin lesion is present in the photo. It does '
+            'not determine whether skin is healthy, and it is not a medical '
+            'diagnosis. Always consult a dermatologist.',
+            style: TextStyle(
+                fontSize: 11, color: Color(0xFF92400E), height: 1.45),
+          ),
+        ),
+      ]),
+    );
+  }
+
   // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
@@ -1807,6 +2042,9 @@ class _AnalysisResultsScreenState
               const SizedBox(height: 16),
             ],
 
+            // Scope / medical disclaimer — shown for every result, both views.
+            if (scan != null) _buildScopeDisclaimer(),
+
             if (user?.role == 'specialist') ...[
               // ── SPECIALIST VIEW: full pipeline ──────────────────────────
 
@@ -1840,14 +2078,14 @@ class _AnalysisResultsScreenState
                       value: _showPipelineDetails,
                       onChanged: (v) =>
                           setState(() => _showPipelineDetails = v),
-                      activeColor: AppColors.primary,
+                      activeThumbColor: AppColors.primary,
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 16),
 
-              // Stage 1: VAE
+              // Stage 1: Normal-vs-Disease gate
               if (scan != null && _showPipelineDetails)
                 _revealSection(show: _showVae, child: _buildVaeSection(scan)),
 
@@ -2021,51 +2259,6 @@ class _CircleProgressPainter extends CustomPainter {
         ..strokeWidth = strokeWidth
         ..strokeCap = StrokeCap.round,
     );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _HeatmapPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-
-    canvas.drawRect(
-        Rect.fromLTWH(0, 0, w, h), Paint()..color = const Color(0xFFD4945C));
-
-    final texturePaint = Paint()..color = const Color(0xFFBF7D42);
-    for (var i = 0; i < 12; i++) {
-      canvas.drawOval(
-        Rect.fromCenter(
-          center: Offset(w * (0.1 + i * 0.08), h * 0.5),
-          width: w * 0.12,
-          height: h * 0.3,
-        ),
-        texturePaint,
-      );
-    }
-
-    final redPaint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          Colors.red.withValues(alpha: 0.9),
-          Colors.orange.withValues(alpha: 0.7),
-          Colors.yellow.withValues(alpha: 0.5),
-          Colors.green.withValues(alpha: 0.3),
-          Colors.transparent,
-        ],
-        stops: const [0.0, 0.25, 0.5, 0.7, 1.0],
-      ).createShader(Rect.fromCircle(
-        center: Offset(w * 0.45, h * 0.5),
-        radius: h * 0.55,
-      ));
-    canvas.drawCircle(Offset(w * 0.45, h * 0.5), h * 0.55, redPaint);
-
-    canvas.drawCircle(Offset(w * 0.45, h * 0.52), h * 0.12,
-        Paint()..color = const Color(0xFF2D1B0E));
   }
 
   @override

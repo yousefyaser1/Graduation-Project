@@ -92,7 +92,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         actions: [
           TextButton(
             onPressed: _loading ? null : _save,
-            child: Text('Save',
+            child: const Text('Save',
                 style: TextStyle(
                     color: AppColors.primary, fontWeight: FontWeight.w700)),
           ),
@@ -252,7 +252,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         prefixIcon: Icon(icon, color: AppColors.textSecondary, size: 20),
         filled: true,
         fillColor: readOnly
-            ? AppColors.border.withOpacity(0.15)
+            ? AppColors.border.withValues(alpha: 0.15)
             : AppColors.primaryLight,
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),

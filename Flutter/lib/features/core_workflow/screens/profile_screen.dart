@@ -32,6 +32,57 @@ class ProfileScreen extends ConsumerWidget {
     return match?.group(1)?.trim() ?? 'Not set';
   }
 
+  static void _showPrivacyDialog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(children: [
+          Icon(Icons.lock_outline, color: AppColors.primary, size: 20),
+          SizedBox(width: 8),
+          Text('Privacy & Security',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        ]),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _PrivacyPoint(
+                icon: Icons.smartphone_outlined,
+                text:
+                    'On-device only: every AI stage (screening gate, CNN, Score-CAM) runs locally. Your photos never leave this phone.',
+              ),
+              _PrivacyPoint(
+                icon: Icons.storage_outlined,
+                text:
+                    'Local storage: scans and results are saved in this app\'s private database — not in the cloud.',
+              ),
+              _PrivacyPoint(
+                icon: Icons.key_outlined,
+                text:
+                    'Passwords are salted and hashed (PBKDF2-HMAC-SHA256) — never stored in plain text.',
+              ),
+              _PrivacyPoint(
+                icon: Icons.delete_outline,
+                text:
+                    'Deleting a scan removes its image and heatmaps from local storage.',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Got it',
+                style: TextStyle(
+                    color: AppColors.primary, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
   static Color _toneColor(String tone) {
     const colors = {
       'Fair': Color(0xFFF5D5B0),
@@ -253,7 +304,7 @@ class ProfileScreen extends ConsumerWidget {
                 _SettingsTile(
                     icon: Icons.lock_outline,
                     label: 'Privacy & Security',
-                    onTap: () {}),
+                    onTap: () => _showPrivacyDialog(context)),
                 const Divider(color: AppColors.border, height: 1),
                 _SettingsTile(
                     icon: Icons.help_outline,
@@ -398,6 +449,28 @@ class _VertDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(width: 1, height: 36, color: AppColors.border);
+  }
+}
+
+class _PrivacyPoint extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const _PrivacyPoint({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, color: AppColors.primary, size: 18),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(text,
+              style: const TextStyle(
+                  fontSize: 13, color: AppColors.textPrimary, height: 1.5)),
+        ),
+      ]),
+    );
   }
 }
 

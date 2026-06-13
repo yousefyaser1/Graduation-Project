@@ -1,23 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/routing/app_router.dart';
+import '../../../models/appointment.dart';
 import '../../../models/scan_result.dart';
+import '../../../providers/appointment_provider.dart';
+import '../../../providers/user_provider.dart';
 
-class BookAppointmentScreen extends StatefulWidget {
+class BookAppointmentScreen extends ConsumerStatefulWidget {
   final ScanResult? scan;
 
   const BookAppointmentScreen({super.key, this.scan});
 
   @override
-  State<BookAppointmentScreen> createState() => _BookAppointmentScreenState();
+  ConsumerState<BookAppointmentScreen> createState() =>
+      _BookAppointmentScreenState();
 }
 
-class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
+class _BookAppointmentScreenState extends ConsumerState<BookAppointmentScreen> {
   int _selectedDoctor  = 0;
   int _selectedDate    = 1;
   int _selectedTime    = 0;
   bool _confirmed      = false;
+  bool _saving         = false;
 
   final _doctors = [
     {
@@ -67,6 +74,36 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
       ),
       body: _confirmed ? _buildConfirmedState() : _buildBookingForm(),
     );
+  }
+
+  Future<void> _confirmAppointment() async {
+    setState(() => _saving = true);
+    final user = ref.read(userProvider);
+    final doc = _doctors[_selectedDoctor];
+    final appt = Appointment(
+      id: const Uuid().v4(),
+      userId: user?.id ?? 'guest',
+      patientName: user?.name ?? 'Guest',
+      doctorName: doc['name']!,
+      specialty: doc['specialty']!,
+      dateLabel: _dates[_selectedDate],
+      timeLabel: _times[_selectedTime],
+      scanId: widget.scan?.id,
+      diagnosis: widget.scan?.diagnosis,
+      createdAt: DateTime.now(),
+    );
+    try {
+      await ref.saveAppointment(appt);
+      if (mounted) setState(() => _confirmed = true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save appointment: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   Widget _buildBookingForm() {
@@ -239,10 +276,16 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () => setState(() => _confirmed = true),
+                  onPressed: _saving ? null : _confirmAppointment,
                   style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.success),
-                  child: const Text('Confirm Appointment'),
+                  child: _saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Text('Confirm Appointment'),
                 ),
               ),
             ],
@@ -375,7 +418,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
             const SizedBox(height: 12),
             TextButton(
               onPressed: () => context.go(AppRoutes.history),
-              child: Text('View in History',
+              child: const Text('View in History',
                   style: TextStyle(
                       color: AppColors.primary,
                       fontWeight: FontWeight.w600)),

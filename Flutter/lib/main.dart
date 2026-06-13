@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:device_preview/device_preview.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -28,12 +27,7 @@ void main() {
     ),
   );
 
-  runApp(
-    DevicePreview(
-      enabled: !kReleaseMode,
-      builder: (context) => const ProviderScope(child: SkinScanApp()),
-    ),
-  );
+  runApp(const ProviderScope(child: SkinScanApp()));
 }
 
 class SkinScanApp extends ConsumerWidget {
@@ -48,8 +42,6 @@ class SkinScanApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       routerConfig: router,
-      locale: DevicePreview.locale(context),
-      builder: DevicePreview.appBuilder,
     );
   }
 }

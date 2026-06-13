@@ -26,6 +26,7 @@ import '../../features/core_workflow/screens/help_support_screen.dart';
 import '../../features/core_workflow/screens/specialist_dashboard_screen.dart';
 import '../../features/results/screens/analysis_results_screen.dart';
 import '../../features/results/screens/book_appointment_screen.dart';
+import '../../features/results/screens/progression_screen.dart';
 import '../../features/results/screens/xai_heatmap_screen.dart';
 import '../../models/scan_result.dart';
 
@@ -58,6 +59,7 @@ class AppRoutes {
   static const String editProfile         = '/edit-profile';
   static const String helpSupport         = '/help-support';
   static const String specialistDashboard = '/specialist-dashboard';
+  static const String progression          = '/progression';
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -150,6 +152,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           builder: (c, s) => const HelpSupportScreen()),
       GoRoute(path: AppRoutes.specialistDashboard,
           builder: (c, s) => const SpecialistDashboardScreen()),
+      GoRoute(path: AppRoutes.progression,
+          builder: (c, s) => const ProgressionScreen()),
     ],
     errorBuilder: (context, state) => Scaffold(
       body: Center(child: Text('Page not found: ${state.uri}')),

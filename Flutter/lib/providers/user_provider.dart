@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../models/user.dart';
 import '../services/database/database_service.dart';
+import '../services/security/password_hasher.dart';
 import '../services/session_service.dart';
 
 class UserNotifier extends StateNotifier<User?> {
@@ -14,7 +15,21 @@ class UserNotifier extends StateNotifier<User?> {
     }
     final row = await DatabaseService().getUserByEmail(email.trim());
     if (row == null) return 'No account found with this email.';
-    if (row['password'] != password) return 'Incorrect password.';
+
+    final stored = row['password'] as String? ?? '';
+    if (PasswordHasher.isHashed(stored)) {
+      if (!PasswordHasher.verify(password, stored)) {
+        return 'Incorrect password.';
+      }
+    } else {
+      // Legacy plaintext row (created before hashing was introduced).
+      // Verify against plaintext, then transparently upgrade to a hash.
+      if (stored != password) return 'Incorrect password.';
+      final upgraded = Map<String, dynamic>.from(row)
+        ..['password'] = PasswordHasher.hash(password);
+      await DatabaseService().updateUser(upgraded);
+    }
+
     state = User.fromMap(row);
     await SessionService().saveUserId(state!.id);
     return null;
@@ -44,7 +59,7 @@ class UserNotifier extends StateNotifier<User?> {
 
     final row = {
       ...user.toMap(),
-      'password': password,
+      'password': PasswordHasher.hash(password),
     };
 
     try {
@@ -90,7 +105,7 @@ class UserNotifier extends StateNotifier<User?> {
     final row = await DatabaseService().getUserByEmail(email.trim());
     if (row == null) return 'No account found with this email.';
     final updated = Map<String, dynamic>.from(row);
-    updated['password'] = newPassword;
+    updated['password'] = PasswordHasher.hash(newPassword);
     await DatabaseService().updateUser(updated);
     return null;
   }
