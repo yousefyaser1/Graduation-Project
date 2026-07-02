@@ -21,7 +21,7 @@ Figure~\ref{fig:system_flow} illustrates the end-to-end system pipeline, from im
 %%   [Image Preprocessing] ── resize, normalize
 %%        │
 %%        ▼
-%%   [Stage 1: VAE Anomaly Detection]
+%%   [Stage 1: Normal-vs-Disease Gate]
 %%        │
 %%        ├── Normal → [Display: "No Disease Detected"]
 %%        │
@@ -190,13 +190,22 @@ A notable class imbalance exists: Eczema comprises roughly 42.4\% of training sa
 
 
 % ============================================================
-\section{Variational Autoencoder (VAE) --- Anomaly Detection}
+\section{Normal-vs-Disease Gating}
 \label{sec:vae}
 % ============================================================
 
-Before any disease classification takes place, the system must first determine whether the captured image actually contains a skin abnormality. A Variational Autoencoder (VAE) serves as the first stage of the inference pipeline---an anomaly detection gate that filters out images of healthy skin before they reach the classifier.
+Before any disease classification takes place, the system must first determine
+whether the captured image actually contains a skin abnormality. Two gating
+approaches were developed during the project: an initial \emph{unsupervised}
+Variational Autoencoder (VAE) anomaly detector, and the \emph{supervised}
+Normal-vs-Disease classifier that was ultimately deployed. This section
+documents the VAE design, explains why it did not transfer reliably to the
+device, and presents the supervised gate that replaced it.
 
-The core insight behind this approach is straightforward: a VAE trained \textit{exclusively} on normal skin textures learns to reconstruct healthy skin with low error. When presented with a diseased patch, the reconstruction degrades noticeably, and the elevated error signals an anomaly.
+The VAE's core insight was straightforward: a network trained \textit{exclusively}
+on normal skin textures learns to reconstruct healthy skin with low error, so a
+diseased patch---being out of distribution---was expected to reconstruct poorly,
+and the elevated error would signal an anomaly.
 
 \subsection{Normal Skin Patch Extraction}
 
@@ -308,55 +317,53 @@ Train / Val / Test split & 70\% / 15\% / 15\% \\ \hline
 
 After training, the model weights were exported and later converted for mobile deployment (see Section~\ref{sec:tflite}).
 
-\subsection{Sliding Window Anomaly Detection}
+\subsection{Sliding-Window Anomaly Scoring}
 
-At inference time, the input image is divided into overlapping $64 \times 64$ patches using a stride of 32 pixels. Each patch is passed through the VAE, and the per-patch reconstruction error is computed as $\text{MSE}(\mathbf{x}, \hat{\mathbf{x}})$. If this error exceeds a calibrated threshold (0.008 in the TFLite deployment; see Section~\ref{sec:challenges}), the patch is flagged as anomalous.
-
-The overall decision follows:
+At inference time the VAE divided the input image into overlapping $64 \times 64$ patches using a stride of 32 pixels. Each patch was passed through the network and scored by its reconstruction error $\text{MSE}(\mathbf{x}, \hat{\mathbf{x}})$; a patch whose error exceeded a calibrated threshold was flagged as anomalous. The image-level decision used the anomaly ratio,
 
 \begin{equation}
 \text{Anomaly Ratio} = \frac{\text{Number of anomalous patches}}{\text{Total number of patches}}
 \end{equation}
 
-If the anomaly ratio exceeds 20\%, the image is classified as anomalous and forwarded to the CNN classifier. Otherwise, the pipeline short-circuits and returns a ``No skin disease detected'' result.
+\noindent forwarding the image to the CNN classifier when the ratio exceeded 20\% and otherwise returning a ``No skin disease detected'' result.
 
-\subsection{VAE Testing and Validation}
+\subsection{Why the VAE Was Replaced}
 
-To verify the anomaly detection module, two categories of test images were evaluated.
+On controlled development data the scheme behaved as intended, but it did not
+transfer to the device. The fundamental problem is that a decoder good enough to
+reconstruct skin also reconstructs the \emph{diseased} regions of skin, so the
+reconstruction error of a lesion was frequently no larger---and sometimes
+smaller---than that of an unusual but healthy patch. The normal and diseased
+reconstruction-error distributions overlapped heavily and, after conversion to
+TFLite, even inverted relative to the development calibration: no fixed threshold
+could be chosen that held across the TFLite runtime and across different phone
+cameras and lighting conditions. In practice this produced both false
+``No disease detected'' exits on genuine lesions and spurious anomalies on plain
+skin. Because the gate is a safety-critical first stage, this unreliability was
+unacceptable, and the VAE was retired in favour of a supervised classifier.
 
-\subsubsection{Normal Skin Test Case}
+\subsection{Deployed Approach: Supervised Normal-vs-Disease Gate}
+\label{sec:supervised_gate}
+
+The VAE was replaced with a \emph{supervised} binary gate: an EfficientNetB0
+classifier (\texttt{normal\_gate.tflite}) trained directly to discriminate normal
+skin from disease. Rather than inferring abnormality indirectly from
+reconstruction error, the gate learns discriminative normal-vs-disease features,
+which transfers far more robustly to phone imagery. It outputs a single
+probability $P(\text{disease}) \in [0,1]$ for the whole image, and two thresholds
+define three decision bands:
 
 \begin{itemize}
-    \item Total patches analysed: 273
-    \item Anomalous patches detected: 10
-    \item Anomaly ratio: 0.037 (below the 0.20 threshold)
-    \item \textbf{Result:} Correctly classified as \textbf{Normal}
+    \item $P(\text{disease}) \le 0.60$ $\rightarrow$ ``No Disease Detected'' --- the pipeline exits.
+    \item $0.60 < P(\text{disease}) < 0.90$ $\rightarrow$ ``Inconclusive'' --- the user is asked to retake; the CNN is not run.
+    \item $P(\text{disease}) \ge 0.90$ $\rightarrow$ the B2+B3 CNN runs to name the disease.
 \end{itemize}
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.7\linewidth]{Figures/Screenshot 2026-03-13 213036.png}
-\caption{VAE reconstruction heatmap for a normal skin image. Uniformly low reconstruction error confirms normal skin texture.}
-\label{fig:vae_normal}
-\end{figure}
-
-\subsubsection{Anomalous Skin Test Case}
-
-\begin{itemize}
-    \item Total patches analysed: 25
-    \item Anomalous patches detected: 11
-    \item Anomaly ratio: 0.44 (above the 0.20 threshold)
-    \item \textbf{Result:} Correctly classified as \textbf{Anomalous}
-\end{itemize}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.7\linewidth]{Figures/Screenshot 2026-03-13 213558.png}
-\caption{VAE reconstruction heatmap for an anomalous skin image. High-error regions (warm colours) correspond to visible lesion areas.}
-\label{fig:vae_anomaly}
-\end{figure}
-
-These results confirm that the VAE effectively distinguishes between normal and diseased skin, serving as a reliable first-stage gate for the inference pipeline.
+\noindent The middle band is a deliberate abstention on images the gate cannot
+confidently call. The quantitative performance of the deployed gate---a clean
+bimodal separation that passes 96\% of held-out normal photographs and fires on
+98.6\% of disease images without ever assigning a confident ``disease'' label to
+normal skin---is reported in the Results chapter.
 
 
 % ============================================================
@@ -364,7 +371,7 @@ These results confirm that the VAE effectively distinguishes between normal and 
 \label{sec:cnn}
 % ============================================================
 
-With the anomaly detection gate established, the next component is the disease classifier itself. This section documents the iterative model development process, beginning with MobileNetV2 as a lightweight baseline and progressing to EfficientNetB2 for improved accuracy.
+With the gating stage established, the next component is the disease classifier itself. This section documents the iterative model development process, beginning with MobileNetV2 as a lightweight baseline and progressing to EfficientNetB2 for improved accuracy.
 
 \subsection{Training Configuration and Data Pipeline}
 \label{sec:training_config}
@@ -582,7 +589,7 @@ ReduceLROnPlateau & factor=0.3, patience=8 & factor=0.3, patience=8 \\ \hline
 
 \subsubsection{EfficientNetB2 Results}
 
-The trained EfficientNetB2 model achieved \textbf{90.46\% validation accuracy} on the 325-sample held-out set, with the following per-class breakdown:
+The trained EfficientNetB2 model achieved \textbf{90.46\% validation accuracy} on the held-out validation set, with the following per-class breakdown:
 
 \begin{table}[H]
 \centering
@@ -594,11 +601,11 @@ The trained EfficientNetB2 model achieved \textbf{90.46\% validation accuracy} o
 Acne & 94.62\% & Strongest performing class \\ \hline
 Eczema & 91.55\% & Boosted via class weight adjustment \\ \hline
 Tinea & 87.78\% & Minority class; focal loss improved recall \\ \hline
-\textbf{Overall} & \textbf{90.46\%} & \textbf{Deployed model} \\ \hline
+\textbf{Overall} & \textbf{90.46\%} & \textbf{Strongest single backbone} \\ \hline
 \end{tabular}
 \end{table}
 
-This represents a gain of 6.3 percentage points over the best MobileNetV2 result, driven by EfficientNet's compound scaling and the switch to focal loss. The EfficientNetB2 model was selected as the production classifier and converted for on-device deployment.
+This represents a gain of 6.3 percentage points over the best MobileNetV2 result, driven by EfficientNet's compound scaling and the switch to focal loss. EfficientNetB2 was the strongest single backbone at this stage; the production classifier subsequently \emph{ensembles} it with an EfficientNetB3 backbone (300$\times$300 input), averaging their class probabilities because the two networks make complementary errors. Note that the 90.46\% figure is an optimistic development-time \emph{validation} accuracy used for model selection; the unbiased, leakage-audited \textbf{test-set} accuracy of the deployed B2+B3 ensemble ($\approx$88.4\%) is reported in the Results chapter. Both backbones were converted to TFLite for on-device deployment.
 
 
 % ============================================================
@@ -651,7 +658,7 @@ The Score-CAM procedure operates in six steps:
 \label{sec:tflite}
 % ============================================================
 
-All three models in the inference pipeline were converted from their training formats (Keras for EfficientNetB2, PyTorch for the VAE) to TensorFlow Lite for on-device execution. Conversion applied dynamic range quantisation via \texttt{tf.lite.Optimize.DEFAULT}, reducing model size and improving inference latency on mobile hardware.
+All models in the inference pipeline were converted from their Keras training format to TensorFlow Lite for on-device execution. Conversion applied dynamic range quantisation via \texttt{tf.lite.Optimize.DEFAULT}, reducing model size and improving inference latency on mobile hardware.
 
 \begin{table}[H]
 \centering
@@ -660,13 +667,14 @@ All three models in the inference pipeline were converted from their training fo
 \begin{tabular}{|l|l|l|l|}
 \hline
 \textbf{File} & \textbf{Purpose} & \textbf{Input Shape} & \textbf{Input Range} \\ \hline
-\texttt{vae\_model.tflite} & VAE anomaly gate & $(1, 64, 64, 3)$ float32 & $[0, 1]$ \\ \hline
+\texttt{normal\_gate.tflite} & Normal-vs-Disease gate (EfficientNetB0) & $(1, 224, 224, 3)$ float32 & $[0, 255]$ \\ \hline
 \texttt{cnn\_b2\_model.tflite} & EfficientNetB2 classifier & $(1, 260, 260, 3)$ float32 & $[0, 255]$ \\ \hline
-\texttt{b2\_feature\_extractor.tflite} & Score-CAM features & $(1, 260, 260, 3)$ float32 & $[0, 255]$ \\ \hline
+\texttt{cnn\_b3\_model.tflite} & EfficientNetB3 classifier & $(1, 300, 300, 3)$ float32 & $[0, 255]$ \\ \hline
+\texttt{b3\_feature\_extractor.tflite} & Score-CAM features & $(1, 300, 300, 3)$ float32 & $[0, 255]$ \\ \hline
 \end{tabular}
 \end{table}
 
-A critical implementation detail: EfficientNetB2 includes an internal \texttt{Rescaling(1/255)} layer baked into the model graph, so the application passes \textit{raw} $[0, 255]$ pixel values. The VAE, which was built without such a layer, requires pre-normalised $[0, 1]$ input. Mixing up these ranges was one of the most subtle bugs encountered during integration (see Section~\ref{sec:challenges} and Appendix~\ref{app:preprocessing}).
+A critical implementation detail: the EfficientNet backbones include an internal \texttt{Rescaling(1/255)} layer baked into the model graph, so the application passes \textit{raw} $[0, 255]$ pixel values rather than pre-normalised input. Passing already-normalised $[0, 1]$ values would double-normalise and collapse the activations---one of the most subtle bugs encountered during integration (see Section~\ref{sec:challenges} and Appendix~\ref{app:preprocessing}).
 
 The training-time augmentation layers embedded in the EfficientNet model graph are automatically stripped by the TFLite converter, as they evaluate to no-ops when \texttt{training=False}.
 
@@ -725,7 +733,7 @@ Future<AnalysisResult> analyzeImage({
 }) async { ... }
 \end{verbatim}
 
-The three TFLite interpreters (VAE, B2 classifier, and B2 feature extractor) are loaded lazily on first call and held in memory for the application's lifetime. To maintain UI responsiveness during the 30-iteration Score-CAM loop, the computation yields to the Flutter event loop every five iterations:
+The TFLite interpreters (the Normal-vs-Disease gate, the B2 and B3 classifiers, and the B3 feature extractor) are loaded lazily on first call and held in memory for the application's lifetime. To maintain UI responsiveness during the 30-iteration Score-CAM loop, the computation yields to the Flutter event loop every five iterations:
 
 \begin{verbatim}
 if (ki % 5 == 0) await Future.delayed(Duration.zero);
@@ -791,7 +799,7 @@ The application provides a polished, production-ready interface with both light 
     \label{fig:ui_analyzing}
 \end{figure}
 
-%% SCREENSHOT: Analyzing screen → step indicators (Preprocessing, VAE, CNN, Score-CAM).
+%% SCREENSHOT: Analyzing screen → step indicators (Preprocessing, Gate, CNN, Score-CAM).
 
 \begin{figure}[H]
     \centering
@@ -823,13 +831,13 @@ Several non-trivial technical challenges emerged during system integration. Each
 
 \textbf{Problem:} EfficientNetB2 was trained with an internal \texttt{Rescaling(1/255)} layer. During initial TFLite integration, the application was normalising pixel values to $[0, 1]$ before passing them to the interpreter, resulting in double normalisation and near-zero classifier activations.
 
-\textbf{Resolution:} Raw $[0, 255]$ pixel values are now passed to the EfficientNetB2 model, while $[0, 1]$ normalisation is retained only for the VAE. Two separate helper functions---\texttt{fillFloat32Raw()} and \texttt{fillFloat32()}---handle the two normalisation modes (see Appendix~\ref{app:preprocessing}).
+\textbf{Resolution:} Raw $[0, 255]$ pixel values are now passed to every EfficientNet model in the pipeline (the gate and both classifier backbones), each of which carries its own internal \texttt{Rescaling(1/255)} layer. Centralising preprocessing in a single helper that returns raw pixel tensors removed the double-normalisation class of bug (see Appendix~\ref{app:preprocessing}).
 
-\subsection{VAE Threshold Calibration Across Frameworks}
+\subsection{Image Orientation (EXIF) Mismatch}
 
-\textbf{Problem:} The VAE was originally calibrated in PyTorch with an MSE anomaly threshold of 0.006. After conversion to TFLite, a systematic offset of approximately +0.002 was observed, attributable to floating-point precision differences and dynamic range quantisation.
+\textbf{Problem:} Early on, normal skin photographs taken with the phone camera were frequently misclassified (for example as Tinea). The cause was not the model: phone cameras store the image upright only via an EXIF orientation flag, and the decoding path fed the raw, sideways pixel buffer to the network, so the model received rotated input it had never been trained on.
 
-\textbf{Resolution:} The threshold was recalibrated empirically to 0.008 for the TFLite runtime, producing equivalent anomaly detection behaviour to the original PyTorch model.
+\textbf{Resolution:} The decoder now bakes the EXIF orientation into the pixel data (\texttt{img.bakeOrientation}) before any resizing or inference, so the network always receives an upright image. Correcting this---together with selecting the gate threshold at 0.60---eliminated the false positives on normal skin.
 
 \subsection{UI Responsiveness During Score-CAM}
 
@@ -851,17 +859,30 @@ Table~\ref{tab:model_summary} summarises the classification accuracy achieved ac
 
 \begin{table}[H]
 \centering
-\caption{Training phase summary and model progression.}
+\caption{Training phase summary and model progression. Phase rows are
+development-time \emph{validation} accuracies used for model selection; the final
+row is the unbiased, leakage-audited \emph{test-set} accuracy of the deployed
+ensemble (see the Results chapter).}
 \label{tab:model_summary}
 \begin{tabular}{|l|l|l|c|c|}
 \hline
 \textbf{Phase} & \textbf{Architecture} & \textbf{Key Technique} & \textbf{Accuracy} & \textbf{Deployed?} \\ \hline
-Phase 1 & MobileNetV2 & Frozen backbone, GAP head & 75.16\% & No \\ \hline
-Phase 2 & MobileNetV2 & Top 55 layers unfrozen & 84.16\% & No \\ \hline
-Phase 3 & MobileNetV2 & Over-regularisation experiment & 73.91\% & No \\ \hline
-Phase 4 & EfficientNetB0 & Focal loss, online augmentation & 84.62\% & No \\ \hline
-\textbf{Final} & \textbf{EfficientNetB2} & \textbf{Focal loss, two-phase training} & \textbf{90.46\%} & \textbf{Yes} \\ \hline
+Phase 1 & MobileNetV2 & Frozen backbone, GAP head & 75.16\% (val) & No \\ \hline
+Phase 2 & MobileNetV2 & Top 55 layers unfrozen & 84.16\% (val) & No \\ \hline
+Phase 3 & MobileNetV2 & Over-regularisation experiment & 73.91\% (val) & No \\ \hline
+Phase 4 & EfficientNetB0 & Focal loss, online augmentation & 84.62\% (val) & No \\ \hline
+Phase 5 & EfficientNetB2 & Focal loss, two-phase training & 90.46\% (val) & In ensemble \\ \hline
+\textbf{Final} & \textbf{B2+B3 Ensemble} & \textbf{Probability averaging} & \textbf{88.4\% (test)} & \textbf{Yes} \\ \hline
 \end{tabular}
 \end{table}
 
-The progression from MobileNetV2 (84.16\%) to EfficientNetB2 (90.46\%) represents a gain of 6.3 percentage points, driven primarily by compound scaling and the substitution of standard cross-entropy with focal loss for improved class-imbalance handling. The EfficientNetB2 model is the production-deployed classifier, converted to TFLite and bundled with the Flutter application as a fully offline, on-device inference engine.
+The progression from MobileNetV2 to EfficientNet was driven primarily by
+compound scaling and the substitution of standard cross-entropy with focal loss
+for improved class-imbalance handling. The single EfficientNetB2 backbone reached
+90.46\% on the validation split; the production classifier then ensembles it with
+an EfficientNetB3 backbone, averaging their class probabilities. It is important
+not to conflate the optimistic development-time validation numbers above with the
+system's true accuracy: the unbiased figure, measured on the untouched test split
+after a dataset-leakage audit, is $\approx$\textbf{88.4\%} and is reported in full
+in the Results chapter. The deployed ensemble is converted to TFLite and bundled
+with the Flutter application as a fully offline, on-device inference engine.

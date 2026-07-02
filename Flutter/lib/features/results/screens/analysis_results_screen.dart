@@ -111,6 +111,11 @@ class _AnalysisResultsScreenState
   @override
   void initState() {
     super.initState();
+    // Every navigation path now hands us a scan that's already in the DB
+    // (fresh scans are auto-saved in AnalyzingScreen; History/Home/etc. load
+    // from the DB). Reflect that so the button reads "Saved!" rather than
+    // implying the scan still needs to be saved.
+    _saved = widget.scan != null;
     _startReveal();
   }
 

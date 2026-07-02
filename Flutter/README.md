@@ -35,7 +35,6 @@ Flutter/
 │   │   │       └── personal_info_screen.dart
 │   │   ├── core_workflow/             # Main app workflow screens
 │   │   │   └── screens/
-│   │   │       ├── dashboard_screen.dart
 │   │   │       ├── body_part_selection_screen.dart
 │   │   │       └── capture_screen.dart
 │   │   └── results/                   # Results and visualization screens

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/routing/app_router.dart';
 import '../../../models/scan_result.dart';
+import '../../../providers/scan_provider.dart';
 import '../../../services/ai/ai_isolate_runner.dart';
 
-class AnalyzingScreen extends StatefulWidget {
+class AnalyzingScreen extends ConsumerStatefulWidget {
   final String bodyPart;
   final String imagePath;
 
@@ -17,10 +19,10 @@ class AnalyzingScreen extends StatefulWidget {
   });
 
   @override
-  State<AnalyzingScreen> createState() => _AnalyzingScreenState();
+  ConsumerState<AnalyzingScreen> createState() => _AnalyzingScreenState();
 }
 
-class _AnalyzingScreenState extends State<AnalyzingScreen>
+class _AnalyzingScreenState extends ConsumerState<AnalyzingScreen>
     with TickerProviderStateMixin {
   late final AnimationController _pulseController;
   late final AnimationController _rotateController;
@@ -130,6 +132,15 @@ class _AnalyzingScreenState extends State<AnalyzingScreen>
           cnnMs: result.cnnMs,
           scoreCamMs: result.scoreCamMs,
         );
+      }
+
+      // Persist the scan to history before navigating, so it always shows up
+      // in History / "Recent Scans" without needing a manual save tap. saveScan
+      // copies the image + heatmaps into durable storage and refreshes the list.
+      try {
+        await ref.saveScan(scan);
+      } catch (_) {
+        // Best-effort: never block the result screen if persistence fails.
       }
 
       // Mark all steps done, then navigate

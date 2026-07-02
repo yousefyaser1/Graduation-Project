@@ -66,6 +66,17 @@ dev_dependencies:
   # Dev-only: cross-device preview harness (not bundled in the shipping app).
   device_preview: ^1.1.0
 
+# Compile SQLite from the bundled amalgamation instead of downloading a
+# pre-compiled .so from GitHub at build time. The download fails on this machine
+# because local TLS interception (proxy/AV) presents a self-signed root that
+# Dart's build hook does not trust (dartbug.com/52266). Compiling from source
+# avoids the network entirely and works on Android + desktop ffi alike.
+hooks:
+  user_defines:
+    sqlite3:
+      source: source
+      path: third_party/sqlite3/sqlite3.c
+
 flutter:
   uses-material-design: true
 
