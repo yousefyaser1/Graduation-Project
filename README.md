@@ -188,6 +188,7 @@ Graduation-Project/
 │   │   ├── cnn_b2_model.tflite           # EfficientNetB2 classifier
 │   │   ├── cnn_b3_model.tflite           # EfficientNetB3 classifier
 │   │   └── b3_feature_extractor.tflite   # Score-CAM feature extraction
+│   ├── screenshots/                      # App UI screenshots
 │   └── pubspec.yaml
 │
 ├── models/                               # Standalone copies of the 4 trained TFLite models
@@ -199,13 +200,8 @@ Graduation-Project/
 │   ├── score_cam.py, xai_eval.py         # Score-CAM / explainability
 │   └── model1/                           # Earlier MobileNetV2 training scripts (Kaggle)
 │
-├── docs/                                 # Thesis, report & figures
-│   ├── Final_Thesis_Grad_II_Group_U.pdf  # Full graduation thesis
-│   ├── Chapter4_Implementation.pdf       # Thesis Chapter 4 — Implementation
-│   ├── Chapter5_Testing.tex              # Thesis Chapter 5 — Testing & Results
-│   ├── Chapter_Results.tex, Chapter_Testing.tex, Chapter_UML_Design.tex
-│   ├── Figures/, chapter5_figures/       # Thesis figures & generated charts
-│   └── screenshots/                      # App UI screenshots
+├── docs/                                 # Full graduation thesis
+│   └── Final_Thesis_Grad_II_Group_U.pdf
 │
 ├── .gitignore
 └── README.md                             # This file
