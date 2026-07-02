@@ -194,7 +194,7 @@ Graduation-Project/
 │   ├── screenshots/                      # App UI screenshots
 │   └── pubspec.yaml
 │
-├── models/                               # Standalone copies of the 4 trained TFLite models
+├── models/                               # Standalone copies of the 5 trained TFLite models
 │
 ├── ml/                                   # Python: model training, evaluation & conversion
 │   ├── first_code_model_training.py …    # Training pipeline (numbered by stage)
