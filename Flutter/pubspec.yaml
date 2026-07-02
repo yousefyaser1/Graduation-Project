@@ -82,4 +82,4 @@ flutter:
 
   assets:
     - assets/images/
-    - assets/models/  # For future TFLite models
+    - assets/models/  # Bundled TFLite models (gate, B2/B3, feature extractor, VAE)

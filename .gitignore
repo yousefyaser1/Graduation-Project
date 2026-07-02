@@ -47,7 +47,7 @@ Flutter/android/key.properties
 Thumbs.db
 
 # Claude / Kilo
-.claude/scheduled_tasks.lock
+.claude/
 .kilo/
 
 # Office temp / lock files
