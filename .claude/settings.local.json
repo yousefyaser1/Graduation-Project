@@ -258,7 +258,11 @@
       "PowerShell(Add-Type -AssemblyName System.IO.Compression.FileSystem; $src=\"C:\\\\Users\\\\A\\\\Project_Submission\"; $out=\"C:\\\\Users\\\\A\\\\Project_Submission.zip\"; if \\(Test-Path $out\\) { Remove-Item $out -Force }; [System.IO.Compression.ZipFile]::CreateFromDirectory\\($src, $out, [System.IO.Compression.CompressionLevel]::Optimal, $true\\); Write-Output \"DONE $\\([math]::Round\\(\\(Get-Item $out\\).Length/1MB,2\\)\\) MB\")",
       "PowerShell(Get-ChildItem -Recurse \"Flutter/third_party\" -File -ErrorAction SilentlyContinue | Select-Object FullName, @{N='MB';E={[math]::Round\\($_.Length/1MB,2\\)}} | Format-Table -AutoSize)",
       "PowerShell(git add *)",
-      "PowerShell(git *)"
+      "PowerShell(git *)",
+      "Bash(grep -lE \"^\\(import|from\\) \\(score_cam|first_code|second_code|third_code|fourth_code|fifth_code|sixth_code|seventh_code|eighth_code|ninth_code|tenth_code|verify_pipeline|honest_eval|ablation_eval\\)\" *.py)",
+      "Bash(grep -lE \"\\\\.tex\" *.py)",
+      "Bash(mkdir -p ml docs models)",
+      "Bash(git mv *)"
     ]
   }
 }

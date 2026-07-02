@@ -172,7 +172,7 @@ The first build takes 3–5 minutes. When the terminal shows a `✓ Built` messa
 
 ```
 Graduation-Project/
-├── Flutter/                              # Mobile application (Flutter/Dart)
+├── Flutter/                              # Mobile application — run this (see steps above)
 │   ├── lib/
 │   │   ├── features/                     # UI screens
 │   │   │   ├── onboarding/               # Login, signup, role selection
@@ -183,20 +183,34 @@ Graduation-Project/
 │   │   │   ├── ai/ai_service.dart        # Three-stage AI pipeline
 │   │   │   └── database/                 # SQLite scan history
 │   │   └── core/                         # Theme, routing, shared widgets
-│   ├── assets/models/                    # TFLite model files (on-device inference)
-│   │   ├── vae_model.tflite              # Anomaly detector (3.4 MB)
-│   │   ├── cnn_b2_model.tflite           # EfficientNetB2 classifier (8.6 MB)
+│   ├── assets/models/                    # TFLite models bundled INTO the app
+│   │   ├── vae_model.tflite              # Anomaly detector
+│   │   ├── cnn_b2_model.tflite           # EfficientNetB2 classifier
 │   │   ├── cnn_b3_model.tflite           # EfficientNetB3 classifier
 │   │   └── b3_feature_extractor.tflite   # Score-CAM feature extraction
 │   └── pubspec.yaml
 │
-├── model1/                               # Python model training scripts (Kaggle)
-├── thirteenth_code_evaluation_metrics.py # CNN evaluation (confusion matrix, ROC, AUC)
-├── fourteenth_code_vae_evaluation.py     # VAE anomaly detection evaluation
-├── Chapter4_Implementation.tex           # Thesis Chapter 4 — Implementation
-├── Chapter5_Testing.tex                  # Thesis Chapter 5 — Testing & Results
+├── models/                               # Standalone copies of the 4 trained TFLite models
+│
+├── ml/                                   # Python: model training, evaluation & conversion
+│   ├── first_code_model_training.py …    # Training pipeline (numbered by stage)
+│   ├── thirteenth_code_evaluation_metrics.py  # CNN evaluation (confusion matrix, ROC, AUC)
+│   ├── fourteenth_code_vae_evaluation.py      # VAE anomaly detection evaluation
+│   ├── score_cam.py, xai_eval.py         # Score-CAM / explainability
+│   └── model1/                           # Earlier MobileNetV2 training scripts (Kaggle)
+│
+├── docs/                                 # Thesis, report & figures
+│   ├── Chapter4_Implementation.pdf       # Thesis Chapter 4 — Implementation
+│   ├── Chapter5_Testing.tex              # Thesis Chapter 5 — Testing & Results
+│   ├── Chapter_Results.tex, Chapter_Testing.tex, Chapter_UML_Design.tex
+│   ├── Figures/, chapter5_figures/       # Thesis figures & generated charts
+│   └── screenshots/                      # App UI screenshots
+│
+├── .gitignore
 └── README.md                             # This file
 ```
+
+> **To run the app you only need the `Flutter/` folder** — it bundles its own copy of the models under `Flutter/assets/models/`. The top-level `ml/`, `models/`, and `docs/` folders are supporting material (training code, standalone models, and the thesis) and are not required to build or run the app.
 
 ---
 
