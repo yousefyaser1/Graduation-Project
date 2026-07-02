@@ -1,7 +1,7 @@
 # Explainable AI (XAI) Powered Mobile App for Skin Disease Detection
 
 **Project:** Graduation Project — MSA University, Computer Science Engineering  
-**Student:** Yousef Yaser
+**Student:** Youssef Yasser & Abdelrahman Mohammed
 
 **Repository URL:** https://github.com/yousefyaser1/Graduation-Project
 
