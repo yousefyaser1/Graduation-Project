@@ -11,9 +11,11 @@
 
 An offline, on-device mobile application for automated skin disease screening using a three-stage AI pipeline:
 
-1. **VAE (Variational Autoencoder)** — detects whether the image contains anomalous skin
+1. **Normal-skin gate (EfficientNetB0)** — a supervised classifier that decides whether the image shows diseased skin; if it reads as normal, the pipeline halts with "No Disease Detected"
 2. **EfficientNet CNN Ensemble (B2 + B3)** — classifies the disease: Acne, Eczema, or Tinea
 3. **Score-CAM (XAI Heatmap)** — highlights the skin regions that influenced the diagnosis
+
+> An earlier design used a Variational Autoencoder (VAE) for stage 1; it could not reliably separate normal skin from disease on-device, so it was replaced by the supervised EfficientNetB0 gate. The VAE model is still bundled but no longer part of the decision path.
 
 All inference runs locally on-device using TensorFlow Lite. No internet connection or server is required.
 
@@ -117,7 +119,7 @@ Open a terminal and run:
 git clone https://github.com/yousefyaser1/Graduation-Project.git
 ```
 
-This downloads the full project — source code, all four TFLite AI model files, and assets — into a folder called `Graduation-Project` in your current directory.
+This downloads the full project — source code, the bundled TFLite AI model files, and assets — into a folder called `Graduation-Project` in your current directory.
 
 ---
 
@@ -184,10 +186,11 @@ Graduation-Project/
 │   │   │   └── database/                 # SQLite scan history
 │   │   └── core/                         # Theme, routing, shared widgets
 │   ├── assets/models/                    # TFLite models bundled INTO the app
-│   │   ├── vae_model.tflite              # Anomaly detector
-│   │   ├── cnn_b2_model.tflite           # EfficientNetB2 classifier
-│   │   ├── cnn_b3_model.tflite           # EfficientNetB3 classifier
-│   │   └── b3_feature_extractor.tflite   # Score-CAM feature extraction
+│   │   ├── normal_gate.tflite            # Stage 1 — EfficientNetB0 normal-skin gate
+│   │   ├── cnn_b2_model.tflite           # Stage 2 — EfficientNetB2 classifier
+│   │   ├── cnn_b3_model.tflite           # Stage 2 — EfficientNetB3 classifier
+│   │   ├── b3_feature_extractor.tflite   # Stage 3 — Score-CAM feature extraction
+│   │   └── vae_model.tflite              # Legacy VAE (bundled, no longer used)
 │   ├── screenshots/                      # App UI screenshots
 │   └── pubspec.yaml
 │
@@ -215,8 +218,8 @@ Graduation-Project/
 
 | Stage | Model | Input | Output |
 |-------|-------|-------|--------|
-| 1 — Anomaly Detection | VAE (`vae_model.tflite`) | 64×64 image patches | Anomaly ratio; pipeline halts if skin is normal |
-| 2 — Classification | EfficientNetB2 + B3 ensemble | 260×260 / 300×300 | Acne / Eczema / Tinea probabilities (50/50 average, 20-step TTA) |
+| 1 — Normal-skin gate | EfficientNetB0 (`normal_gate.tflite`) | 224×224 | P(disease); pipeline halts with "No Disease Detected" if skin reads as normal |
+| 2 — Classification | EfficientNetB2 + B3 ensemble (`cnn_b2_model.tflite`, `cnn_b3_model.tflite`) | 260×260 / 300×300 | Acne / Eczema / Tinea probabilities (50/50 average, 20-step TTA) |
 | 3 — Explainability | Score-CAM (`b3_feature_extractor.tflite`) | 300×300 | Heatmap overlay highlighting lesion regions |
 
 **Test accuracy: 88.4%** on a held-out test split (macro AUC 0.962). The normal-skin gate passes ~96% of normal images and fires on ~98.6% of disease images.
@@ -233,7 +236,7 @@ The full thesis is included at [`docs/Final_Thesis_Grad_II_Group_U.pdf`](docs/Fi
 | `Android licence not accepted` | Run `flutter doctor --android-licenses` and type `y` for each prompt |
 | Emulator won't start | Enable virtualisation in BIOS (Intel VT-x / AMD-V), or install **Intel HAXM** via Android Studio SDK Tools |
 | `Gradle build failed` | Confirm JDK 17 is installed; set `JAVA_HOME` to the JDK 17 directory |
-| App crashes during analysis | Verify all four `.tflite` files are present under `Flutter/assets/models/` |
+| App crashes during analysis | Verify all `.tflite` files are present under `Flutter/assets/models/` |
 | Camera unavailable in emulator | Use Gallery upload instead; drag a `.jpg` onto the emulator window |
 
 ---
