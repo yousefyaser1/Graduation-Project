@@ -200,6 +200,7 @@ Graduation-Project/
 │   └── model1/                           # Earlier MobileNetV2 training scripts (Kaggle)
 │
 ├── docs/                                 # Thesis, report & figures
+│   ├── Final_Thesis_Grad_II_Group_U.pdf  # Full graduation thesis
 │   ├── Chapter4_Implementation.pdf       # Thesis Chapter 4 — Implementation
 │   ├── Chapter5_Testing.tex              # Thesis Chapter 5 — Testing & Results
 │   ├── Chapter_Results.tex, Chapter_Testing.tex, Chapter_UML_Design.tex
@@ -222,7 +223,9 @@ Graduation-Project/
 | 2 — Classification | EfficientNetB2 + B3 ensemble | 260×260 / 300×300 | Acne / Eczema / Tinea probabilities (50/50 average, 20-step TTA) |
 | 3 — Explainability | Score-CAM (`b3_feature_extractor.tflite`) | 300×300 | Heatmap overlay highlighting lesion regions |
 
-**Validation accuracy: 92.62%** on a 325-image held-out split (test set preserved for future fine-tuning).
+**Test accuracy: 88.4%** on a held-out test split (macro AUC 0.962). The normal-skin gate passes ~96% of normal images and fires on ~98.6% of disease images.
+
+The full thesis is included at [`docs/Final_Thesis_Grad_II_Group_U.pdf`](docs/Final_Thesis_Grad_II_Group_U.pdf).
 
 ---
 
